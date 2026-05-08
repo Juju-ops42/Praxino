@@ -19,8 +19,19 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { FieldShell, Input, Select } from "@/components/ui/Input";
 import { useAuth } from "@/lib/auth";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { fetchUserPractices, type Practice } from "@/lib/practice";
+import {
+  createPatient,
+  fetchPatients,
+  type Patient,
+  type PatientStatus,
+} from "@/lib/patient";
 import { cn } from "@/lib/utils";
+import { AlertTriangle, Loader2, X } from "lucide-react";
 
 interface NavSection {
   label: string;
@@ -361,67 +372,353 @@ function TodayPanel() {
 }
 
 function PatientsPanel() {
-  const patients = [
-    { ini: "M.K.", indikation: "Stimmstörung", icd: "R49.0", status: "Aktiv" },
-    { ini: "L.S.", indikation: "Aphasie nach Schlaganfall", icd: "R47.0", status: "Aktiv" },
-    { ini: "T.B.", indikation: "Artikulationsstörung", icd: "F80.0", status: "Aktiv" },
-    { ini: "F.R.", indikation: "Schluckstörung", icd: "R13.10", status: "Pausiert" },
-    { ini: "S.W.", indikation: "Stottern", icd: "F98.5", status: "Aktiv" },
-  ];
+  const auth = useAuth();
+  const [practice, setPractice] = useState<Practice | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | undefined>();
+  const [createOpen, setCreateOpen] = useState(false);
+  const demoMode = !isSupabaseConfigured;
+
+  const refresh = async (practiceId: string) => {
+    try {
+      setError(undefined);
+      const list = await fetchPatients(practiceId);
+      setPatients(list);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler beim Laden.");
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (demoMode || !auth.user) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const list = await fetchUserPractices(auth.user.id);
+        if (cancelled) return;
+        const first = list[0] ?? null;
+        setPractice(first);
+        if (first) await refresh(first.id);
+      } catch (err) {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Praxis konnte nicht geladen werden.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.user, demoMode]);
 
   return (
     <div className="space-y-8">
       <PanelHeader
         title="Patient:innen"
-        description="Pseudonymisierte Übersicht. Klarnamen werden später hinter Rollen-/Rechtekonzept geschützt."
+        description="Pseudonymisierte Übersicht. Initialen + Geburtsjahr genügen für die Anzeige — Klarnamen liegen außerhalb der App."
         actions={
-          <button className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-ink-900 px-4 text-sm font-medium text-surface-50 hover:bg-ink-800">
-            <Plus className="size-4" aria-hidden /> Neue:r Patient:in
-          </button>
+          <Button
+            type="button"
+            onClick={() => setCreateOpen((v) => !v)}
+            disabled={demoMode || !practice}
+          >
+            {createOpen ? <X className="size-4" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+            {createOpen ? "Abbrechen" : "Neue:r Patient:in"}
+          </Button>
         }
       />
-      <div className="overflow-hidden rounded-2xl border border-ink-100 bg-surface-0 shadow-soft">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-50 text-left text-[11px] uppercase tracking-wider text-ink-400">
-            <tr>
-              <th className="px-5 py-3 font-medium">Initialen</th>
-              <th className="px-5 py-3 font-medium">Indikation</th>
-              <th className="px-5 py-3 font-medium">ICD-10</th>
-              <th className="px-5 py-3 font-medium">Status</th>
-              <th className="px-5 py-3" aria-label="Aktion" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-ink-100">
-            {patients.map((p) => (
-              <tr key={p.ini} className="hover:bg-surface-50">
-                <td className="px-5 py-3.5">
-                  <span className="grid size-8 place-items-center rounded-full bg-accent-100 text-[11px] font-semibold text-accent-700">
-                    {p.ini}
-                  </span>
-                </td>
-                <td className="px-5 py-3.5 text-ink-800">{p.indikation}</td>
-                <td className="px-5 py-3.5 font-mono text-[12px] text-ink-500">{p.icd}</td>
-                <td className="px-5 py-3.5">
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] ring-1",
-                      p.status === "Aktiv"
-                        ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
-                        : "bg-ink-50 text-ink-500 ring-ink-100",
-                    )}
-                  >
-                    {p.status}
-                  </span>
-                </td>
-                <td className="px-5 py-3.5 text-right">
-                  <ChevronRight className="ml-auto size-4 text-ink-300" aria-hidden />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      {demoMode ? (
+        <DemoBanner />
+      ) : !practice && !loading ? (
+        <NoPracticeState />
+      ) : null}
+
+      {createOpen && practice && auth.user ? (
+        <CreatePatientForm
+          practiceId={practice.id}
+          userId={auth.user.id}
+          onCancel={() => setCreateOpen(false)}
+          onCreated={async () => {
+            setCreateOpen(false);
+            await refresh(practice.id);
+          }}
+        />
+      ) : null}
+
+      {loading ? (
+        <PanelLoading />
+      ) : (
+        <PatientsTable patients={demoMode ? DEMO_PATIENTS : patients} />
+      )}
+
+      {error ? (
+        <p role="alert" className="text-sm text-rose-600">
+          {error}
+        </p>
+      ) : null}
+
+      {demoMode ? (
+        <p className="text-xs text-ink-400">
+          Demo-Daten — keine echten Patientendaten. Sobald Supabase konfiguriert
+          ist und du onboarded bist, siehst du echte Datensätze deiner Praxis.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+interface DemoPatient {
+  id: string;
+  initials: string;
+  indication: string | null;
+  icd10: string | null;
+  status: PatientStatus;
+  year_of_birth: number | null;
+}
+
+const DEMO_PATIENTS: DemoPatient[] = [
+  { id: "1", initials: "M.K.", indication: "Stimmstörung", icd10: "R49.0", status: "active", year_of_birth: 1962 },
+  { id: "2", initials: "L.S.", indication: "Aphasie nach Schlaganfall", icd10: "R47.0", status: "active", year_of_birth: 1955 },
+  { id: "3", initials: "T.B.", indication: "Artikulationsstörung", icd10: "F80.0", status: "active", year_of_birth: 2018 },
+  { id: "4", initials: "F.R.", indication: "Schluckstörung", icd10: "R13.10", status: "paused", year_of_birth: 1948 },
+  { id: "5", initials: "S.W.", indication: "Stottern", icd10: "F98.5", status: "active", year_of_birth: 2014 },
+];
+
+function PatientsTable({ patients }: { patients: Array<Patient | DemoPatient> }) {
+  if (patients.length === 0) {
+    return (
+      <div className="rounded-3xl border border-dashed border-ink-200 bg-surface-0 p-10 text-center">
+        <p className="font-display text-lg text-ink-700">Noch keine Patient:innen.</p>
+        <p className="mt-1.5 text-sm text-ink-500">
+          Lege deine erste Patient:in an — Initialen und Geburtsjahr reichen.
+        </p>
       </div>
-      <p className="text-xs text-ink-400">Demo-Daten — keine echten Patientendaten.</p>
+    );
+  }
+  return (
+    <div className="overflow-hidden rounded-2xl border border-ink-100 bg-surface-0 shadow-soft">
+      <table className="w-full text-sm">
+        <thead className="bg-surface-50 text-left text-[11px] uppercase tracking-wider text-ink-400">
+          <tr>
+            <th className="px-5 py-3 font-medium">Initialen</th>
+            <th className="px-5 py-3 font-medium">Geb.</th>
+            <th className="px-5 py-3 font-medium">Indikation</th>
+            <th className="px-5 py-3 font-medium">ICD-10</th>
+            <th className="px-5 py-3 font-medium">Status</th>
+            <th className="px-5 py-3" aria-label="Aktion" />
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-ink-100">
+          {patients.map((p) => (
+            <tr key={p.id} className="hover:bg-surface-50">
+              <td className="px-5 py-3.5">
+                <span className="grid size-8 place-items-center rounded-full bg-accent-100 text-[11px] font-semibold text-accent-700">
+                  {p.initials}
+                </span>
+              </td>
+              <td className="px-5 py-3.5 font-mono text-[12px] text-ink-500">
+                {p.year_of_birth ?? "—"}
+              </td>
+              <td className="px-5 py-3.5 text-ink-800">{p.indication ?? "—"}</td>
+              <td className="px-5 py-3.5 font-mono text-[12px] text-ink-500">{p.icd10 ?? "—"}</td>
+              <td className="px-5 py-3.5">
+                <PatientStatusBadge status={p.status} />
+              </td>
+              <td className="px-5 py-3.5 text-right">
+                <ChevronRight className="ml-auto size-4 text-ink-300" aria-hidden />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PatientStatusBadge({ status }: { status: PatientStatus }) {
+  const map: Record<PatientStatus, { label: string; cls: string }> = {
+    active: { label: "Aktiv", cls: "bg-emerald-50 text-emerald-700 ring-emerald-100" },
+    paused: { label: "Pausiert", cls: "bg-amber-50 text-amber-700 ring-amber-100" },
+    archived: { label: "Archiviert", cls: "bg-ink-50 text-ink-500 ring-ink-100" },
+  };
+  const m = map[status];
+  return (
+    <span className={cn("rounded-full px-2 py-0.5 text-[11px] ring-1", m.cls)}>
+      {m.label}
+    </span>
+  );
+}
+
+function CreatePatientForm({
+  practiceId,
+  userId,
+  onCancel,
+  onCreated,
+}: {
+  practiceId: string;
+  userId: string;
+  onCancel: () => void;
+  onCreated: () => void | Promise<void>;
+}) {
+  const [initials, setInitials] = useState("");
+  const [yearOfBirth, setYearOfBirth] = useState("");
+  const [indication, setIndication] = useState("");
+  const [icd10, setIcd10] = useState("");
+  const [status, setStatus] = useState<PatientStatus>("active");
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | undefined>();
+
+  async function submit() {
+    if (!initials.trim()) {
+      setErrorMsg("Initialen fehlen.");
+      return;
+    }
+    setBusy(true);
+    setErrorMsg(undefined);
+    try {
+      const yob = yearOfBirth.trim() ? Number.parseInt(yearOfBirth, 10) : null;
+      await createPatient(
+        {
+          practice_id: practiceId,
+          initials: initials.trim(),
+          year_of_birth: Number.isFinite(yob) ? yob : null,
+          indication,
+          icd10,
+          status,
+        },
+        userId,
+      );
+      await onCreated();
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : "Anlegen fehlgeschlagen. Bitte erneut versuchen.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+      className="rounded-2xl border border-ink-100 bg-surface-0 p-6 shadow-soft"
+    >
+      <p className="text-[11px] uppercase tracking-wider text-ink-400">Neue Patient:in</p>
+      <h3 className="mt-1 text-base font-semibold tracking-tight text-ink-900">
+        Initialen, Indikation, Status
+      </h3>
+
+      <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <FieldShell id="ini" label="Initialen" required>
+          <Input
+            id="ini"
+            value={initials}
+            onChange={(e) => setInitials(e.target.value)}
+            placeholder="M.K."
+            maxLength={10}
+          />
+        </FieldShell>
+        <FieldShell id="yob" label="Geburtsjahr" hint="Optional">
+          <Input
+            id="yob"
+            inputMode="numeric"
+            value={yearOfBirth}
+            onChange={(e) => setYearOfBirth(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="1962"
+            maxLength={4}
+          />
+        </FieldShell>
+        <FieldShell id="status" label="Status">
+          <Select
+            id="status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as PatientStatus)}
+          >
+            <option value="active">Aktiv</option>
+            <option value="paused">Pausiert</option>
+            <option value="archived">Archiviert</option>
+          </Select>
+        </FieldShell>
+        <FieldShell id="indication" label="Indikation" hint="Klartext">
+          <Input
+            id="indication"
+            value={indication}
+            onChange={(e) => setIndication(e.target.value)}
+            placeholder="Stimmstörung"
+          />
+        </FieldShell>
+        <FieldShell id="icd" label="ICD-10" hint="Optional">
+          <Input
+            id="icd"
+            value={icd10}
+            onChange={(e) => setIcd10(e.target.value)}
+            placeholder="R49.0"
+            maxLength={10}
+          />
+        </FieldShell>
+      </div>
+
+      {errorMsg ? (
+        <p role="alert" className="mt-4 text-sm text-rose-600">
+          {errorMsg}
+        </p>
+      ) : null}
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+          Abbrechen
+        </Button>
+        <Button type="submit" loading={busy}>
+          Anlegen
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function PanelLoading() {
+  return (
+    <div className="grid place-items-center rounded-2xl border border-ink-100 bg-surface-0 p-10">
+      <Loader2 className="size-5 animate-spin text-ink-400" aria-hidden />
+    </div>
+  );
+}
+
+function DemoBanner() {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-800">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <div>
+        <p className="font-medium">Demo-Modus.</p>
+        <p className="mt-1 text-amber-700">
+          Supabase ist nicht konfiguriert — du siehst Beispieldaten. Setze{" "}
+          <code className="rounded bg-amber-100 px-1 py-0.5 text-[12px]">VITE_SUPABASE_URL</code>{" "}
+          und <code className="rounded bg-amber-100 px-1 py-0.5 text-[12px]">VITE_SUPABASE_ANON_KEY</code>,
+          dann werden echte Datensätze deiner Praxis geladen.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function NoPracticeState() {
+  return (
+    <div className="rounded-3xl border border-dashed border-ink-200 bg-surface-0 p-10 text-center">
+      <p className="font-display text-lg text-ink-700">Keine Praxis verknüpft.</p>
+      <p className="mt-1.5 text-sm text-ink-500">
+        Schließ das Onboarding ab oder kontaktiere uns unter hello@praxino.de.
+      </p>
     </div>
   );
 }
