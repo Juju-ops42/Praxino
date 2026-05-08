@@ -117,3 +117,61 @@ export async function updateReportStatus(
   const { error } = await supabase.from("reports").update(patch).eq("id", id);
   if (error) throw error;
 }
+
+/* ---------- Editor / Status-Workflow ---------- */
+
+export interface ReportContent {
+  befund?: string;
+  therapieziel?: string;
+  verlauf?: string;
+  empfehlung?: string;
+  /** future-proof: weitere Sektionen können dazukommen ohne Migration */
+  [key: string]: string | undefined;
+}
+
+export async function fetchReport(id: string): Promise<Report | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  const { data, error } = await supabase
+    .from("reports")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as Report | null) ?? null;
+}
+
+export async function updateReport(
+  id: string,
+  patch: { title?: string; content?: ReportContent },
+): Promise<Report> {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error("Supabase ist nicht konfiguriert.");
+  }
+  // Version bumpen — Status-Wechsel über updateReportStatus separat.
+  const { data: current, error: fetchErr } = await supabase
+    .from("reports")
+    .select("version")
+    .eq("id", id)
+    .single();
+  if (fetchErr) throw fetchErr;
+  const nextVersion = ((current as { version: number }).version ?? 1) + 1;
+
+  const update: Record<string, unknown> = { version: nextVersion };
+  if (patch.title !== undefined) update.title = patch.title.trim();
+  if (patch.content !== undefined) update.content = patch.content;
+
+  const { data, error } = await supabase
+    .from("reports")
+    .update(update)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as Report;
+}
+
+export async function deleteReport(id: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const { error } = await supabase.from("reports").delete().eq("id", id);
+  if (error) throw error;
+}

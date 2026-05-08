@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/Button";
-import { FieldShell, Input, Select } from "@/components/ui/Input";
+import { FieldShell, Input, Select, Textarea } from "@/components/ui/Input";
 import { useAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { fetchUserPractices, type Practice } from "@/lib/practice";
@@ -43,13 +43,19 @@ import {
 import {
   countOpenReports,
   createReport,
+  deleteReport,
   fetchPracticeReports,
+  fetchReport,
   REPORT_STATUS_LABEL,
   REPORT_TYPE_LABEL,
+  updateReport,
+  type Report,
+  type ReportContent,
   type ReportStatus,
   type ReportType,
   type ReportWithPatient,
 } from "@/lib/report";
+import { updateReportStatus } from "@/lib/report";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2, X } from "lucide-react";
 
@@ -1552,6 +1558,7 @@ function ReportsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
   const [createOpen, setCreateOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const refresh = async (practiceId: string) => {
     try {
@@ -1634,7 +1641,10 @@ function ReportsPanel() {
       {loading ? (
         <PanelLoading />
       ) : (
-        <ReportsList reports={demoMode ? DEMO_REPORTS : reports} />
+        <ReportsList
+          reports={demoMode ? DEMO_REPORTS : reports}
+          onSelect={(id) => !demoMode && setSelectedId(id)}
+        />
       )}
 
       {error ? (
@@ -1642,7 +1652,25 @@ function ReportsPanel() {
           {error}
         </p>
       ) : null}
+
+      {selectedId && practice && auth.user ? (
+        <ReportEditorOverlay
+          reportId={selectedId}
+          userId={auth.user.id}
+          patientLookup={patientLookupFromReports(reports)}
+          onClose={() => setSelectedId(null)}
+          onChanged={async () => {
+            await refresh(practice.id);
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function patientLookupFromReports(reports: ReportWithPatient[]) {
+  return Object.fromEntries(
+    reports.map((r) => [r.patient_id, r.patient_initials ?? "—"]),
   );
 }
 
@@ -1684,8 +1712,10 @@ const DEMO_REPORTS: DemoReport[] = [
 
 function ReportsList({
   reports,
+  onSelect,
 }: {
   reports: Array<ReportWithPatient | DemoReport>;
+  onSelect: (id: string) => void;
 }) {
   if (reports.length === 0) {
     return (
@@ -1700,25 +1730,29 @@ function ReportsList({
   return (
     <ul className="grid gap-3">
       {reports.map((r) => (
-        <li
-          key={r.id}
-          className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 rounded-2xl border border-ink-100 bg-surface-0 p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card"
-        >
-          <span className="grid size-10 place-items-center rounded-xl bg-accent-50 text-accent-700 ring-1 ring-accent-100">
-            <FileSignature className="size-5" aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[14.5px] font-medium text-ink-900">
-              {REPORT_TYPE_LABEL[r.type]}
-              <span className="ml-2 text-ink-400">·</span>
-              <span className="ml-2 text-ink-700">{r.title}</span>
-            </p>
-            <p className="text-[12px] text-ink-500">
-              Pat. {r.patient_initials ?? "—"} · zuletzt {formatSessionDate(r.updated_at)}
-            </p>
-          </div>
-          <ReportStatusBadge status={r.status} />
-          <ChevronRight className="size-4 text-ink-300" aria-hidden />
+        <li key={r.id}>
+          <button
+            type="button"
+            onClick={() => onSelect(r.id)}
+            className="grid w-full grid-cols-[auto_1fr_auto_auto] items-center gap-4 rounded-2xl border border-ink-100 bg-surface-0 p-4 text-left shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card"
+          >
+            <span className="grid size-10 place-items-center rounded-xl bg-accent-50 text-accent-700 ring-1 ring-accent-100">
+              <FileSignature className="size-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[14.5px] font-medium text-ink-900">
+                {REPORT_TYPE_LABEL[r.type]}
+                <span className="ml-2 text-ink-400">·</span>
+                <span className="ml-2 text-ink-700">{r.title}</span>
+              </p>
+              <p className="text-[12px] text-ink-500">
+                Pat. {r.patient_initials ?? "—"} · zuletzt{" "}
+                {formatSessionDate(r.updated_at)}
+              </p>
+            </div>
+            <ReportStatusBadge status={r.status} />
+            <ChevronRight className="size-4 text-ink-300" aria-hidden />
+          </button>
         </li>
       ))}
     </ul>
@@ -1957,4 +1991,328 @@ function formatTime(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/* -------------------- Report Editor Overlay -------------------- */
+
+const SECTIONS: Array<{ key: keyof ReportContent; label: string; placeholder: string }> = [
+  {
+    key: "befund",
+    label: "Befund",
+    placeholder: "Funktionelle Dysphonie, mittel. Stimme rau, eingeschränkter Tonumfang.",
+  },
+  {
+    key: "therapieziel",
+    label: "Therapieziel",
+    placeholder: "Verbesserung tonaler Stabilität, Reduktion Heiserkeit.",
+  },
+  {
+    key: "verlauf",
+    label: "Verlauf",
+    placeholder: "Atemstütze und Resonanzaufbau geübt; Compliance gut, Fortschritt sichtbar.",
+  },
+  {
+    key: "empfehlung",
+    label: "Empfehlung",
+    placeholder: "Verlängerung um 10 Einheiten empfohlen.",
+  },
+];
+
+function ReportEditorOverlay({
+  reportId,
+  userId,
+  patientLookup,
+  onClose,
+  onChanged,
+}: {
+  reportId: string;
+  userId: string;
+  patientLookup: Record<string, string>;
+  onClose: () => void;
+  onChanged: () => void | Promise<void>;
+}) {
+  const [report, setReport] = useState<Report | null>(null);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState<ReportContent>({});
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | undefined>();
+  const [savedAt, setSavedAt] = useState<string | undefined>();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetchReport(reportId);
+        if (cancelled || !r) return;
+        setReport(r);
+        setTitle(r.title);
+        setContent((r.content as ReportContent) ?? {});
+      } catch (err) {
+        if (!cancelled)
+          setErrorMsg(
+            err instanceof Error ? err.message : "Bericht konnte nicht geladen werden.",
+          );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reportId]);
+
+  useEffect(() => {
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function handleSave() {
+    if (!report) return;
+    setBusy(true);
+    setErrorMsg(undefined);
+    try {
+      const updated = await updateReport(report.id, { title, content });
+      setReport(updated);
+      setSavedAt(new Date().toISOString());
+      await onChanged();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Speichern fehlgeschlagen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleStatus(next: ReportStatus) {
+    if (!report) return;
+    setBusy(true);
+    setErrorMsg(undefined);
+    try {
+      await updateReportStatus(report.id, next, userId);
+      const refreshed = await fetchReport(report.id);
+      if (refreshed) setReport(refreshed);
+      await onChanged();
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : "Status konnte nicht geändert werden.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!report) return;
+    if (!window.confirm("Bericht wirklich löschen? Das lässt sich nicht rückgängig machen.")) return;
+    setBusy(true);
+    setErrorMsg(undefined);
+    try {
+      await deleteReport(report.id);
+      await onChanged();
+      onClose();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!report) {
+    return (
+      <div
+        className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 backdrop-blur-sm"
+        onClick={onClose}
+      >
+        <div className="grid size-12 place-items-center rounded-xl bg-surface-0 shadow-card">
+          <Loader2 className="size-5 animate-spin text-ink-400" aria-hidden />
+        </div>
+      </div>
+    );
+  }
+
+  const patientLabel = patientLookup[report.patient_id] ?? "—";
+  const isLocked = report.status === "signed" || report.status === "exported";
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="report-editor-title"
+      className="fixed inset-0 z-50 flex justify-end bg-ink-900/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.section
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        className="flex h-full w-full max-w-2xl flex-col bg-surface-50 shadow-lift"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-ink-100 bg-surface-0 px-7 py-5">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wider text-ink-400">
+              {REPORT_TYPE_LABEL[report.type]} · Pat. {patientLabel}
+            </p>
+            <h2
+              id="report-editor-title"
+              className="mt-1 truncate font-display text-xl font-medium tracking-tight text-ink-900"
+            >
+              {report.title}
+            </h2>
+            <div className="mt-2 flex items-center gap-2">
+              <ReportStatusBadge status={report.status} />
+              <span className="text-[11px] text-ink-400">
+                v{report.version} · {formatSessionDate(report.updated_at)}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Editor schließen"
+            className="grid size-9 place-items-center rounded-lg text-ink-500 hover:bg-surface-100"
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        </header>
+
+        <div className="flex-1 space-y-6 overflow-y-auto px-7 py-6">
+          <FieldShell id="rTitle" label="Titel" required>
+            <Input
+              id="rTitle"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="z. B. Verlängerung um 10 Einheiten"
+              disabled={isLocked}
+            />
+          </FieldShell>
+
+          <div className="grid gap-5">
+            {SECTIONS.map((section) => (
+              <FieldShell
+                key={section.key as string}
+                id={`r-${section.key as string}`}
+                label={section.label}
+                hint={
+                  section.key === "empfehlung"
+                    ? "Auf Heilmittelpositionsnummer / Einheiten verzichten wir bewusst — kommt mit dem Verordnungs-Modul."
+                    : undefined
+                }
+              >
+                <Textarea
+                  id={`r-${section.key as string}`}
+                  rows={section.key === "verlauf" ? 5 : 3}
+                  value={content[section.key] ?? ""}
+                  onChange={(e) =>
+                    setContent((c) => ({ ...c, [section.key]: e.target.value }))
+                  }
+                  placeholder={section.placeholder}
+                  disabled={isLocked}
+                />
+              </FieldShell>
+            ))}
+          </div>
+
+          {report.status === "signed" && report.signed_at ? (
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-[13px] text-emerald-800">
+              Freigegeben am {formatSessionDate(report.signed_at)}. Inhalte sind
+              gegen weitere Änderungen gesperrt.
+            </div>
+          ) : null}
+
+          {errorMsg ? (
+            <p role="alert" className="text-sm text-rose-600">
+              {errorMsg}
+            </p>
+          ) : null}
+          {savedAt ? (
+            <p className="text-[12px] text-ink-400">
+              Zuletzt gespeichert {formatSessionDate(savedAt)}.
+            </p>
+          ) : null}
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-100 bg-surface-0 px-7 py-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <ReportStatusActions
+              current={report.status}
+              busy={busy}
+              onChange={handleStatus}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            {report.status === "draft" ? (
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                className="text-sm font-medium text-rose-600 hover:text-rose-700"
+                disabled={busy}
+              >
+                Löschen
+              </button>
+            ) : null}
+            <Button
+              type="button"
+              onClick={() => void handleSave()}
+              loading={busy}
+              disabled={isLocked}
+            >
+              Speichern
+            </Button>
+          </div>
+        </footer>
+      </motion.section>
+    </div>
+  );
+}
+
+function ReportStatusActions({
+  current,
+  busy,
+  onChange,
+}: {
+  current: ReportStatus;
+  busy: boolean;
+  onChange: (s: ReportStatus) => void | Promise<void>;
+}) {
+  const transitions: Record<
+    ReportStatus,
+    Array<{ to: ReportStatus; label: string; tone: "primary" | "outline" }>
+  > = {
+    draft: [{ to: "in_review", label: "Zur Prüfung", tone: "primary" }],
+    in_review: [
+      { to: "signed", label: "Freigeben", tone: "primary" },
+      { to: "draft", label: "Zurück zu Entwurf", tone: "outline" },
+    ],
+    signed: [
+      { to: "exported", label: "Als exportiert markieren", tone: "outline" },
+      { to: "draft", label: "Wieder öffnen", tone: "outline" },
+    ],
+    exported: [{ to: "draft", label: "Wieder öffnen", tone: "outline" }],
+  };
+  const opts = transitions[current];
+  return (
+    <>
+      {opts.map((o) => (
+        <Button
+          key={o.to}
+          type="button"
+          size="sm"
+          variant={o.tone === "primary" ? "primary" : "outline"}
+          onClick={() => void onChange(o.to)}
+          disabled={busy}
+        >
+          {o.label}
+        </Button>
+      ))}
+    </>
+  );
 }
