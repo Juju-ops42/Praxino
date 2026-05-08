@@ -8,6 +8,8 @@ import { ProductPreviewSection } from "@/components/landing/ProductPreviewSectio
 import { WhyNowSection } from "@/components/landing/WhyNowSection";
 import { PrivacySection } from "@/components/landing/PrivacySection";
 import { PricingSection } from "@/components/landing/PricingSection";
+import { RoadmapSection } from "@/components/landing/RoadmapSection";
+import { FaqSection } from "@/components/landing/FaqSection";
 import { StoryTeaserSection } from "@/components/landing/StoryTeaserSection";
 import { WaitlistSection } from "@/components/landing/WaitlistSection";
 
@@ -25,7 +27,9 @@ export function LandingPage() {
       <ProductPreviewSection />
       <WhyNowSection />
       <PrivacySection />
+      <RoadmapSection />
       <PricingSection />
+      <FaqSection />
       <StoryTeaserSection />
       <WaitlistSection />
     </PageShell>
