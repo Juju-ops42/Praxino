@@ -3,8 +3,8 @@ import { ArrowRight, CheckCircle2, Mail } from "lucide-react";
 import { Section, SectionHeading } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
 import { FieldShell, Input, Select, Textarea } from "@/components/ui/Input";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { isEmail } from "@/lib/utils";
+import { submitPilotWaitlist } from "@/lib/waitlist";
 import type { Discipline, PilotWaitlistEntry, TeamSize } from "@/types";
 
 type FormState = {
@@ -55,7 +55,6 @@ export function WaitlistSection() {
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!validate()) return;
-
     setSubmit({ kind: "loading" });
 
     const payload: PilotWaitlistEntry = {
@@ -67,36 +66,17 @@ export function WaitlistSection() {
       message: form.message.trim() || undefined,
     };
 
-    if (!isSupabaseConfigured || !supabase) {
-      // Mock-Pfad: Supabase noch nicht konfiguriert. UI bleibt nutzbar,
-      // damit Tests, lokale Previews und Vercel-Demo-Deployments funktionieren.
-      // eslint-disable-next-line no-console
-      console.info("[Praxino] Supabase nicht konfiguriert — Mock-Submit:", payload);
-      await new Promise((r) => setTimeout(r, 500));
-      setSubmit({ kind: "success", mocked: true });
+    const result = await submitPilotWaitlist(payload);
+    if (result.ok) {
+      setSubmit({ kind: "success", mocked: result.mocked });
       setForm(initialState);
-      return;
-    }
-
-    try {
-      const { error } = await supabase.from("pilot_waitlist").insert({
-        name: payload.name,
-        practice_name: payload.practiceName ?? null,
-        email: payload.email,
-        discipline: payload.discipline,
-        team_size: payload.teamSize,
-        message: payload.message ?? null,
-        source: "landingpage",
+    } else {
+      setSubmit({
+        kind: "error",
+        message:
+          result.errorMessage ??
+          "Es gab ein Problem beim Speichern. Bitte später erneut versuchen.",
       });
-      if (error) throw error;
-      setSubmit({ kind: "success", mocked: false });
-      setForm(initialState);
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Es gab ein Problem beim Speichern. Bitte später erneut versuchen.";
-      setSubmit({ kind: "error", message });
     }
   }
 
@@ -187,12 +167,7 @@ export function WaitlistSection() {
                 <option value="andere">Andere Fachrichtung</option>
               </Select>
             </FieldShell>
-            <FieldShell
-              id="teamSize"
-              label="Teamgröße"
-              required
-              error={errors.teamSize}
-            >
+            <FieldShell id="teamSize" label="Teamgröße" required error={errors.teamSize}>
               <Select
                 id="teamSize"
                 name="teamSize"

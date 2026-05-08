@@ -181,11 +181,14 @@ Priorität: Mittel
 - Header-Nav klappt auf Mobile zu einem schlanken Menü. *(✓ Disclosure-Menu mit Body-Scroll-Lock)*
 
 ### P1-013 — Smooth-Scroll + Anchor-Links robust
-Status: `[ ]`
+Status: `[x]`
 Priorität: Niedrig
 
 **Akzeptanzkriterien:** Anchor-Links (`#produkt`, `#pilot`, `#datenschutz`)
-funktionieren auch bei direkter URL-Eingabe.
+funktionieren auch bei direkter URL-Eingabe. *(✓ via `html { scroll-behavior: smooth }`,
+respektiert `prefers-reduced-motion`, `section[id] { scroll-margin-top: 5rem }` für
+Sticky-Header-Offset).*
+**Dateien:** `src/styles/globals.css`.
 
 ---
 
@@ -209,12 +212,12 @@ Priorität: Hoch
 - Eintrag in Tabelle sichtbar.
 
 ### P2-004 — Fehlerhandling im Frontend härten
-Status: `[ ]`
+Status: `[x]`
 Priorität: Mittel
 
 **Akzeptanzkriterien:**
-- Netzwerkfehler werden abgefangen.
-- Spezifische Supabase-Fehler (z. B. `PGRST*`) sauber gemappt.
+- Netzwerkfehler werden abgefangen. *(✓ try/catch, "Failed to fetch"-Mapping)*
+- Spezifische Supabase-Fehler (z. B. `PGRST*`) sauber gemappt. *(✓ `mapWaitlistError` in `src/lib/waitlist.ts`)*
 - User sieht eine deutsche Fehlermeldung.
 
 ### P2-005 — Admin-Auswertung vorbereiten (Off-App)
@@ -263,12 +266,13 @@ Priorität: Mittel
 - Sinnvolle Defaults (`staleTime`, `retry`).
 
 ### P3-005 — Globaler Error-Boundary
-Status: `[ ]`
+Status: `[x]`
 Priorität: Mittel
 
 **Akzeptanzkriterien:**
-- Crashes zeigen freundliche Fallback-UI.
-- Optional: Reload-Button.
+- Crashes zeigen freundliche Fallback-UI. *(✓ `ErrorBoundary` in `main.tsx`)*
+- Optional: Reload-Button. *(✓ Reload + Retry)*
+**Dateien:** `src/components/ErrorBoundary.tsx`, `src/main.tsx`.
 
 ---
 

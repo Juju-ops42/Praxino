@@ -64,6 +64,12 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
   }
   html,
   body {
@@ -73,6 +79,10 @@
   }
   body {
     min-height: 100vh;
+  }
+  /* Sticky-Header-Offset für Sprungmarken (#produkt, #pilot, #datenschutz, #pricing) */
+  section[id] {
+    scroll-margin-top: 5rem;
   }
   ::selection {
     background-color: var(--color-accent-200);
