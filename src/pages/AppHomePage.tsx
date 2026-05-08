@@ -32,9 +32,11 @@ import {
 } from "@/lib/patient";
 import {
   createSession,
+  fetchPatientSessions,
   fetchPracticeSessions,
   type SessionStatus,
   type SessionWithPatient,
+  type TherapySession,
 } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2, X } from "lucide-react";
@@ -384,6 +386,7 @@ function PatientsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
   const [createOpen, setCreateOpen] = useState(false);
+  const [selected, setSelected] = useState<Patient | DemoPatient | null>(null);
   const demoMode = !isSupabaseConfigured;
 
   const refresh = async (practiceId: string) => {
@@ -421,6 +424,18 @@ function PatientsPanel() {
       cancelled = true;
     };
   }, [auth.user, demoMode]);
+
+  if (selected) {
+    return (
+      <PatientDetailView
+        patient={selected}
+        practiceId={practice?.id ?? null}
+        userId={auth.user?.id ?? null}
+        demoMode={demoMode}
+        onBack={() => setSelected(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -460,7 +475,10 @@ function PatientsPanel() {
       {loading ? (
         <PanelLoading />
       ) : (
-        <PatientsTable patients={demoMode ? DEMO_PATIENTS : patients} />
+        <PatientsTable
+          patients={demoMode ? DEMO_PATIENTS : patients}
+          onSelect={setSelected}
+        />
       )}
 
       {error ? (
@@ -476,6 +494,328 @@ function PatientsPanel() {
         </p>
       ) : null}
     </div>
+  );
+}
+
+/* ----------- Patient Detail (Sub-View innerhalb PatientsPanel) ----------- */
+
+function PatientDetailView({
+  patient,
+  practiceId,
+  userId,
+  demoMode,
+  onBack,
+}: {
+  patient: Patient | DemoPatient;
+  practiceId: string | null;
+  userId: string | null;
+  demoMode: boolean;
+  onBack: () => void;
+}) {
+  const [sessions, setSessions] = useState<TherapySession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  const isRealPatient = !demoMode && "practice_id" in patient;
+  const realPatient = isRealPatient ? (patient as Patient) : null;
+
+  const refresh = async () => {
+    if (!realPatient) return;
+    try {
+      setError(undefined);
+      const list = await fetchPatientSessions(realPatient.id);
+      setSessions(list);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sitzungen konnten nicht geladen werden.");
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!realPatient) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const list = await fetchPatientSessions(realPatient.id);
+        if (!cancelled) setSessions(list);
+      } catch (err) {
+        if (!cancelled)
+          setError(
+            err instanceof Error ? err.message : "Sitzungen konnten nicht geladen werden.",
+          );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [realPatient?.id]);
+
+  return (
+    <div className="space-y-8">
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-900"
+      >
+        ← Zurück zur Patient:innen-Liste
+      </button>
+
+      <header className="rounded-3xl border border-ink-100 bg-surface-0 p-7 shadow-soft">
+        <div className="flex flex-wrap items-start gap-5">
+          <span className="grid size-14 place-items-center rounded-2xl bg-accent-100 text-base font-semibold text-accent-700 ring-1 ring-accent-200/60">
+            {patient.initials}
+          </span>
+          <div className="flex-1">
+            <h2 className="font-display text-2xl font-medium tracking-tight text-ink-900">
+              Pat. {patient.initials}
+            </h2>
+            <p className="mt-1 text-[14px] text-ink-500">
+              {patient.indication ?? "Keine Indikation hinterlegt"}
+              {patient.icd10 ? ` · ICD-10 ${patient.icd10}` : ""}
+              {patient.year_of_birth ? ` · geb. ${patient.year_of_birth}` : ""}
+            </p>
+            <div className="mt-3">
+              <PatientStatusBadge status={patient.status} />
+            </div>
+          </div>
+          <Button
+            type="button"
+            disabled={demoMode || !realPatient || !practiceId || !userId}
+            onClick={() => setCreateOpen((v) => !v)}
+          >
+            {createOpen ? <X className="size-4" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+            {createOpen ? "Abbrechen" : "Sitzung loggen"}
+          </Button>
+        </div>
+      </header>
+
+      {createOpen && realPatient && practiceId && userId ? (
+        <CreateSessionForPatient
+          patientId={realPatient.id}
+          practiceId={practiceId}
+          userId={userId}
+          onCancel={() => setCreateOpen(false)}
+          onCreated={async () => {
+            setCreateOpen(false);
+            await refresh();
+          }}
+        />
+      ) : null}
+
+      <section>
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">
+          Verlauf
+        </h3>
+        {loading ? (
+          <div className="mt-3"><PanelLoading /></div>
+        ) : demoMode ? (
+          <DemoSessionsForPatient patient={patient} />
+        ) : sessions.length === 0 ? (
+          <div className="mt-3 rounded-2xl border border-dashed border-ink-200 bg-surface-0 p-8 text-center">
+            <p className="text-[14px] text-ink-700">Noch keine Sitzungen geloggt.</p>
+            <p className="mt-1 text-[12px] text-ink-500">
+              Klick „Sitzung loggen" und halte Therapieziel + Verlauf fest.
+            </p>
+          </div>
+        ) : (
+          <ul className="mt-3 grid gap-3">
+            {sessions.map((s) => (
+              <li
+                key={s.id}
+                className="rounded-2xl border border-ink-100 bg-surface-0 p-4 shadow-soft"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-[13px] font-medium text-ink-800">
+                    {formatSessionDate(s.occurred_at)} · {s.duration_minutes} Min.
+                  </p>
+                  <SessionStatusBadge status={s.status} />
+                </div>
+                {s.goal ? (
+                  <p className="mt-2 text-[13.5px] text-ink-700">
+                    <span className="text-ink-400">Ziel:</span> {s.goal}
+                  </p>
+                ) : null}
+                {s.summary ? (
+                  <p className="mt-1 text-[13.5px] leading-relaxed text-ink-600">
+                    {s.summary}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        {error ? (
+          <p role="alert" className="mt-3 text-sm text-rose-600">
+            {error}
+          </p>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function CreateSessionForPatient({
+  patientId,
+  practiceId,
+  userId,
+  onCancel,
+  onCreated,
+}: {
+  patientId: string;
+  practiceId: string;
+  userId: string;
+  onCancel: () => void;
+  onCreated: () => void | Promise<void>;
+}) {
+  const [duration, setDuration] = useState("45");
+  const [goal, setGoal] = useState("");
+  const [summary, setSummary] = useState("");
+  const [status, setStatus] = useState<SessionStatus>("logged");
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | undefined>();
+
+  async function submit() {
+    setBusy(true);
+    setErrorMsg(undefined);
+    try {
+      const dur = Number.parseInt(duration, 10);
+      await createSession(
+        {
+          practice_id: practiceId,
+          patient_id: patientId,
+          duration_minutes: Number.isFinite(dur) ? dur : 45,
+          goal,
+          summary,
+          status,
+        },
+        userId,
+      );
+      await onCreated();
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : "Sitzung konnte nicht angelegt werden.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+      className="rounded-2xl border border-ink-100 bg-surface-0 p-6 shadow-soft"
+    >
+      <p className="text-[11px] uppercase tracking-wider text-ink-400">
+        Sitzung loggen
+      </p>
+      <h3 className="mt-1 text-base font-semibold tracking-tight text-ink-900">
+        Therapieziel + Verlauf festhalten
+      </h3>
+
+      <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <FieldShell id="dur2" label="Dauer" hint="Minuten">
+          <Input
+            id="dur2"
+            inputMode="numeric"
+            value={duration}
+            onChange={(e) =>
+              setDuration(e.target.value.replace(/[^0-9]/g, "") || "0")
+            }
+            maxLength={3}
+          />
+        </FieldShell>
+        <FieldShell id="status2" label="Status">
+          <Select
+            id="status2"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as SessionStatus)}
+          >
+            <option value="logged">Geloggt</option>
+            <option value="draft">Entwurf</option>
+            <option value="signed">Freigegeben</option>
+          </Select>
+        </FieldShell>
+        <div className="sm:col-span-2 lg:col-span-1">
+          <FieldShell id="goal2" label="Therapieziel" hint="Optional">
+            <Input
+              id="goal2"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              placeholder="tonale Stabilität"
+            />
+          </FieldShell>
+        </div>
+        <div className="sm:col-span-2 lg:col-span-3">
+          <FieldShell id="sum2" label="Verlauf / Notiz" hint="Stichworte reichen">
+            <Input
+              id="sum2"
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              placeholder="Atemübungen, Compliance gut, Fortschritt sichtbar"
+            />
+          </FieldShell>
+        </div>
+      </div>
+
+      {errorMsg ? (
+        <p role="alert" className="mt-4 text-sm text-rose-600">
+          {errorMsg}
+        </p>
+      ) : null}
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+          Abbrechen
+        </Button>
+        <Button type="submit" loading={busy}>
+          Speichern
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function DemoSessionsForPatient({ patient }: { patient: DemoPatient | Patient }) {
+  const matching = DEMO_SESSIONS.filter(
+    (s) => s.patient_initials === patient.initials,
+  );
+  if (matching.length === 0) {
+    return (
+      <div className="mt-3 rounded-2xl border border-dashed border-ink-200 bg-surface-0 p-8 text-center text-[13px] text-ink-500">
+        Demo-Modus: für diese:n Patient:in liegen keine Beispiel-Sitzungen.
+      </div>
+    );
+  }
+  return (
+    <ul className="mt-3 grid gap-3">
+      {matching.map((s) => (
+        <li
+          key={s.id}
+          className="rounded-2xl border border-ink-100 bg-surface-0 p-4 shadow-soft"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-[13px] font-medium text-ink-800">
+              {formatSessionDate(s.occurred_at)} · {s.duration_minutes} Min.
+            </p>
+            <SessionStatusBadge status={s.status} />
+          </div>
+          {s.goal ? (
+            <p className="mt-2 text-[13.5px] text-ink-700">
+              <span className="text-ink-400">Ziel:</span> {s.goal}
+            </p>
+          ) : null}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -496,7 +836,13 @@ const DEMO_PATIENTS: DemoPatient[] = [
   { id: "5", initials: "S.W.", indication: "Stottern", icd10: "F98.5", status: "active", year_of_birth: 2014 },
 ];
 
-function PatientsTable({ patients }: { patients: Array<Patient | DemoPatient> }) {
+function PatientsTable({
+  patients,
+  onSelect,
+}: {
+  patients: Array<Patient | DemoPatient>;
+  onSelect: (p: Patient | DemoPatient) => void;
+}) {
   if (patients.length === 0) {
     return (
       <div className="rounded-3xl border border-dashed border-ink-200 bg-surface-0 p-10 text-center">
@@ -522,7 +868,11 @@ function PatientsTable({ patients }: { patients: Array<Patient | DemoPatient> })
         </thead>
         <tbody className="divide-y divide-ink-100">
           {patients.map((p) => (
-            <tr key={p.id} className="hover:bg-surface-50">
+            <tr
+              key={p.id}
+              onClick={() => onSelect(p)}
+              className="cursor-pointer transition-colors hover:bg-surface-50"
+            >
               <td className="px-5 py-3.5">
                 <span className="grid size-8 place-items-center rounded-full bg-accent-100 text-[11px] font-semibold text-accent-700">
                   {p.initials}
@@ -532,7 +882,9 @@ function PatientsTable({ patients }: { patients: Array<Patient | DemoPatient> })
                 {p.year_of_birth ?? "—"}
               </td>
               <td className="px-5 py-3.5 text-ink-800">{p.indication ?? "—"}</td>
-              <td className="px-5 py-3.5 font-mono text-[12px] text-ink-500">{p.icd10 ?? "—"}</td>
+              <td className="px-5 py-3.5 font-mono text-[12px] text-ink-500">
+                {p.icd10 ?? "—"}
+              </td>
               <td className="px-5 py-3.5">
                 <PatientStatusBadge status={p.status} />
               </td>
