@@ -1,0 +1,592 @@
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "motion/react";
+import {
+  Users,
+  AudioLines,
+  FileSignature,
+  LayoutDashboard,
+  Settings,
+  LogOut,
+  ChevronRight,
+  Plus,
+  Inbox,
+  CalendarRange,
+  ChartLine,
+  Sparkles,
+  Mic,
+  ShieldCheck,
+} from "lucide-react";
+import { Logo } from "@/components/ui/Logo";
+import { Badge } from "@/components/ui/Badge";
+import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
+
+interface NavSection {
+  label: string;
+  items: Array<{
+    id: string;
+    label: string;
+    icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+    badge?: string;
+  }>;
+}
+
+const navSections: NavSection[] = [
+  {
+    label: "Workspace",
+    items: [
+      { id: "today", label: "Heute", icon: LayoutDashboard },
+      { id: "patients", label: "Patient:innen", icon: Users },
+      { id: "sessions", label: "Sitzungen", icon: AudioLines },
+      { id: "reports", label: "Berichte", icon: FileSignature, badge: "3" },
+    ],
+  },
+  {
+    label: "Praxis",
+    items: [{ id: "settings", label: "Einstellungen", icon: Settings }],
+  },
+];
+
+export function AppHomePage() {
+  const auth = useAuth();
+  const [active, setActive] = useState("today");
+
+  useEffect(() => {
+    document.title = "Praxino · Workspace";
+  }, []);
+
+  const email = auth.user?.email ?? "demo@praxino.de";
+  const initials =
+    email
+      .split("@")[0]
+      .split(/[._-]/)
+      .map((p) => p[0]?.toUpperCase())
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("") || "P";
+
+  return (
+    <div className="grid min-h-screen grid-cols-1 bg-surface-50 lg:grid-cols-[260px_1fr]">
+      <aside className="sticky top-0 hidden h-screen flex-col border-r border-ink-100 bg-surface-0 lg:flex">
+        <div className="flex h-16 items-center border-b border-ink-100 px-5">
+          <Logo />
+        </div>
+        <nav className="flex-1 overflow-y-auto px-3 py-5" aria-label="App-Navigation">
+          {navSections.map((section) => (
+            <div key={section.label} className="mb-6">
+              <p className="px-3 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-ink-400">
+                {section.label}
+              </p>
+              <ul className="mt-2 space-y-0.5">
+                {section.items.map((item) => {
+                  const isActive = item.id === active;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => setActive(item.id)}
+                        className={cn(
+                          "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                          isActive
+                            ? "bg-ink-900 text-surface-50"
+                            : "text-ink-600 hover:bg-surface-100 hover:text-ink-900",
+                        )}
+                      >
+                        <item.icon className="size-4" aria-hidden />
+                        <span className="flex-1 text-left">{item.label}</span>
+                        {item.badge ? (
+                          <span
+                            className={cn(
+                              "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                              isActive
+                                ? "bg-accent-500 text-white"
+                                : "bg-accent-100 text-accent-700",
+                            )}
+                          >
+                            {item.badge}
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+        <div className="border-t border-ink-100 p-3">
+          <div className="flex items-center gap-2.5 rounded-lg p-2">
+            <span className="grid size-8 place-items-center rounded-md bg-accent-500 text-[11px] font-semibold text-white">
+              {initials}
+            </span>
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="truncate text-[13px] font-medium text-ink-900">{email}</p>
+              <p className="truncate text-[11px] text-ink-400">Praxis · Demo</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void auth.signOut()}
+              aria-label="Abmelden"
+              className="grid size-8 place-items-center rounded-md text-ink-500 hover:bg-surface-100 hover:text-rose-600"
+            >
+              <LogOut className="size-4" aria-hidden />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <div className="flex min-w-0 flex-col">
+        <Topbar active={active} onChange={setActive} />
+        <main className="flex-1 overflow-y-auto">
+          <motion.div
+            key={active}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8"
+          >
+            {active === "today" ? <TodayPanel /> : null}
+            {active === "patients" ? <PatientsPanel /> : null}
+            {active === "sessions" ? <SessionsPanel /> : null}
+            {active === "reports" ? <ReportsPanel /> : null}
+            {active === "settings" ? <SettingsPanel /> : null}
+          </motion.div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------- Topbar -------------------- */
+
+const labels: Record<string, string> = {
+  today: "Heute",
+  patients: "Patient:innen",
+  sessions: "Sitzungen",
+  reports: "Berichte",
+  settings: "Einstellungen",
+};
+
+function Topbar({
+  active,
+  onChange,
+}: {
+  active: string;
+  onChange: (id: string) => void;
+}) {
+  const tabs = [
+    { id: "today", label: "Heute", icon: LayoutDashboard },
+    { id: "patients", label: "Patient:innen", icon: Users },
+    { id: "sessions", label: "Sitzungen", icon: AudioLines },
+    { id: "reports", label: "Berichte", icon: FileSignature },
+    { id: "settings", label: "Einstellungen", icon: Settings },
+  ];
+  return (
+    <div className="sticky top-0 z-20 border-b border-ink-100 bg-surface-50/85 backdrop-blur">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6 lg:px-8">
+        <div className="flex items-center gap-2 text-sm">
+          <Link to="/" className="text-ink-400 hover:text-ink-700">
+            Praxino
+          </Link>
+          <ChevronRight className="size-3.5 text-ink-300" aria-hidden />
+          <span className="font-medium text-ink-900">{labels[active]}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled
+            title="Audio-MVP folgt in Phase 6"
+            className="hidden h-9 items-center gap-1.5 rounded-lg border border-ink-200 bg-surface-0 px-3 text-sm font-medium text-ink-400 sm:inline-flex"
+          >
+            <Mic className="size-4" aria-hidden /> Sitzung starten
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink-900 px-3 text-sm font-medium text-surface-50 transition-colors hover:bg-ink-800"
+          >
+            <Plus className="size-4" aria-hidden /> Neu
+          </button>
+        </div>
+      </div>
+      {/* Mobile horizontal nav */}
+      <nav
+        className="-mb-px flex gap-1 overflow-x-auto border-t border-ink-100 px-3 pb-2 pt-2 lg:hidden"
+        aria-label="App-Navigation Mobile"
+      >
+        {tabs.map((t) => {
+          const isActive = t.id === active;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onChange(t.id)}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium",
+                isActive
+                  ? "bg-ink-900 text-surface-50"
+                  : "text-ink-500 hover:bg-surface-100 hover:text-ink-800",
+              )}
+            >
+              <t.icon className="size-3.5" aria-hidden />
+              {t.label}
+            </button>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}
+
+/* -------------------- Panels -------------------- */
+
+function PanelHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <header className="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink-900">
+          {title}
+        </h1>
+        {description ? (
+          <p className="mt-1.5 max-w-2xl text-[15px] text-ink-500">{description}</p>
+        ) : null}
+      </div>
+      {actions}
+    </header>
+  );
+}
+
+function TodayPanel() {
+  const stats = [
+    { label: "Sitzungen heute", value: "8", icon: AudioLines },
+    { label: "Offene Berichte", value: "3", icon: Inbox },
+    { label: "Diese Woche", value: "42", icon: CalendarRange },
+    { label: "Bereit zum Export", value: "12", icon: ChartLine },
+  ];
+  const queue = [
+    { ini: "M.K.", what: "Verlängerungsantrag", state: "Entwurf", warn: true },
+    { ini: "L.S.", what: "Therapiebericht Q3", state: "Bereit", warn: false },
+    { ini: "T.B.", what: "Befundbericht", state: "Geprüft", warn: false },
+    { ini: "F.R.", what: "MDK-Stellungnahme", state: "Bereit", warn: false },
+  ];
+  const upcoming = [
+    { ini: "M.K.", indikation: "Stimmstörung", time: "10:00", duration: "45 Min." },
+    { ini: "L.S.", indikation: "Aphasie", time: "10:45", duration: "45 Min." },
+    { ini: "T.B.", indikation: "Artikulation", time: "11:30", duration: "30 Min." },
+    { ini: "F.R.", indikation: "Schluckstörung", time: "13:15", duration: "60 Min." },
+  ];
+
+  return (
+    <div className="space-y-8">
+      <PanelHeader
+        title="Guten Morgen 👋"
+        description="Hier ist dein Tag in einer Übersicht. Noch ist keine echte KI-Pipeline aktiv — du siehst eine Demo-Ansicht des kommenden Workspace."
+      />
+
+      <PilotBanner />
+
+      <section>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {stats.map((s) => (
+            <div
+              key={s.label}
+              className="rounded-2xl border border-ink-100 bg-surface-0 p-4 shadow-soft"
+            >
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-ink-400">
+                <s.icon className="size-3.5" aria-hidden />
+                {s.label}
+              </div>
+              <p className="mt-1.5 font-display text-3xl font-medium tracking-tight text-ink-900">
+                {s.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
+        <Card title="Heutige Sitzungen" eyebrow="Termine">
+          <ul className="divide-y divide-ink-100">
+            {upcoming.map((u) => (
+              <li key={u.ini + u.time} className="flex items-center gap-4 py-3">
+                <span className="grid size-9 place-items-center rounded-full bg-accent-100 text-[11px] font-semibold text-accent-700">
+                  {u.ini}
+                </span>
+                <div className="flex-1">
+                  <p className="text-[13.5px] font-medium text-ink-900">Pat. {u.ini}</p>
+                  <p className="text-[12px] text-ink-500">{u.indikation}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[13px] font-medium text-ink-800">{u.time}</p>
+                  <p className="text-[11px] text-ink-400">{u.duration}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        <Card title="Berichts-Queue" eyebrow="To-Do">
+          <ul className="divide-y divide-ink-100">
+            {queue.map((q) => (
+              <li key={q.ini + q.what} className="flex items-center gap-3 py-3">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-100 text-[11px] font-semibold text-accent-700">
+                  {q.ini}
+                </span>
+                <p className="flex-1 text-sm text-ink-800">{q.what}</p>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[11px] ring-1",
+                    q.warn
+                      ? "bg-amber-50 text-amber-700 ring-amber-100"
+                      : "bg-emerald-50 text-emerald-700 ring-emerald-100",
+                  )}
+                >
+                  {q.state}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </section>
+    </div>
+  );
+}
+
+function PatientsPanel() {
+  const patients = [
+    { ini: "M.K.", indikation: "Stimmstörung", icd: "R49.0", status: "Aktiv" },
+    { ini: "L.S.", indikation: "Aphasie nach Schlaganfall", icd: "R47.0", status: "Aktiv" },
+    { ini: "T.B.", indikation: "Artikulationsstörung", icd: "F80.0", status: "Aktiv" },
+    { ini: "F.R.", indikation: "Schluckstörung", icd: "R13.10", status: "Pausiert" },
+    { ini: "S.W.", indikation: "Stottern", icd: "F98.5", status: "Aktiv" },
+  ];
+
+  return (
+    <div className="space-y-8">
+      <PanelHeader
+        title="Patient:innen"
+        description="Pseudonymisierte Übersicht. Klarnamen werden später hinter Rollen-/Rechtekonzept geschützt."
+        actions={
+          <button className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-ink-900 px-4 text-sm font-medium text-surface-50 hover:bg-ink-800">
+            <Plus className="size-4" aria-hidden /> Neue:r Patient:in
+          </button>
+        }
+      />
+      <div className="overflow-hidden rounded-2xl border border-ink-100 bg-surface-0 shadow-soft">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-50 text-left text-[11px] uppercase tracking-wider text-ink-400">
+            <tr>
+              <th className="px-5 py-3 font-medium">Initialen</th>
+              <th className="px-5 py-3 font-medium">Indikation</th>
+              <th className="px-5 py-3 font-medium">ICD-10</th>
+              <th className="px-5 py-3 font-medium">Status</th>
+              <th className="px-5 py-3" aria-label="Aktion" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-ink-100">
+            {patients.map((p) => (
+              <tr key={p.ini} className="hover:bg-surface-50">
+                <td className="px-5 py-3.5">
+                  <span className="grid size-8 place-items-center rounded-full bg-accent-100 text-[11px] font-semibold text-accent-700">
+                    {p.ini}
+                  </span>
+                </td>
+                <td className="px-5 py-3.5 text-ink-800">{p.indikation}</td>
+                <td className="px-5 py-3.5 font-mono text-[12px] text-ink-500">{p.icd}</td>
+                <td className="px-5 py-3.5">
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[11px] ring-1",
+                      p.status === "Aktiv"
+                        ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                        : "bg-ink-50 text-ink-500 ring-ink-100",
+                    )}
+                  >
+                    {p.status}
+                  </span>
+                </td>
+                <td className="px-5 py-3.5 text-right">
+                  <ChevronRight className="ml-auto size-4 text-ink-300" aria-hidden />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-ink-400">Demo-Daten — keine echten Patientendaten.</p>
+    </div>
+  );
+}
+
+function SessionsPanel() {
+  return (
+    <div className="space-y-8">
+      <PanelHeader
+        title="Sitzungen"
+        description="Hier landet später die Live-Sitzung mit Audio, Live-Doku und Berichtsentwurf."
+      />
+      <EmptyState
+        icon={AudioLines}
+        title="Noch keine Sitzung gestartet."
+        body="Audio-MVP folgt in Phase 6. Vorher: Datenschutzkonzept abgeschlossen, AVV-Prozess vorbereitet."
+        cta={{ label: "Roadmap ansehen", to: "/" }}
+      />
+    </div>
+  );
+}
+
+function ReportsPanel() {
+  const reports = [
+    { ini: "M.K.", type: "Verlängerungsantrag", state: "Entwurf", date: "2026-05-08" },
+    { ini: "L.S.", type: "Therapiebericht", state: "Bereit", date: "2026-05-07" },
+    { ini: "T.B.", type: "Befundbericht", state: "Geprüft", date: "2026-05-06" },
+    { ini: "F.R.", type: "MDK-Stellungnahme", state: "Bereit", date: "2026-05-05" },
+  ];
+  return (
+    <div className="space-y-8">
+      <PanelHeader
+        title="Berichte"
+        description="Therapie-, Verlängerungs-, Befund- und MDK-Berichte. Strukturiert, prüfbar, freigabefähig."
+      />
+      <ul className="grid gap-3">
+        {reports.map((r) => (
+          <li
+            key={r.ini + r.type + r.date}
+            className="flex items-center gap-4 rounded-2xl border border-ink-100 bg-surface-0 p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card"
+          >
+            <span className="grid size-10 place-items-center rounded-xl bg-accent-50 text-accent-700 ring-1 ring-accent-100">
+              <FileSignature className="size-5" aria-hidden />
+            </span>
+            <div className="flex-1">
+              <p className="text-[14.5px] font-medium text-ink-900">{r.type}</p>
+              <p className="text-[12px] text-ink-500">
+                Pat. {r.ini} · {r.date}
+              </p>
+            </div>
+            <Badge tone={r.state === "Entwurf" ? "warning" : "success"}>{r.state}</Badge>
+            <ChevronRight className="size-4 text-ink-300" aria-hidden />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SettingsPanel() {
+  return (
+    <div className="space-y-8">
+      <PanelHeader
+        title="Einstellungen"
+        description="Praxis, Team, Vorlagen, Rollen. Volle Verwaltung folgt in Phase 4."
+      />
+      <Card title="Praxis" eyebrow="Stammdaten">
+        <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+          {[
+            ["Praxisname", "Demo-Praxis"],
+            ["E-Mail", "demo@praxino.de"],
+            ["Plan", "Pilot — kostenlos"],
+            ["Region", "EU / DE"],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-xl bg-surface-50 p-3 ring-1 ring-ink-100">
+              <dt className="text-[11px] uppercase tracking-wider text-ink-400">{k}</dt>
+              <dd className="mt-0.5 text-[13.5px] text-ink-800">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
+      <Card title="Datenschutz" eyebrow="Compliance">
+        <p className="text-sm leading-relaxed text-ink-500">
+          AVV/DPA-Prozess wird vor produktivem Einsatz mit Patientendaten finalisiert.
+          Audit-Log, Löschkonzept und Rollen-Rechte sind in der Architektur vorbereitet.
+        </p>
+        <Link
+          to="/privacy"
+          className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent-700 hover:text-accent-800"
+        >
+          Datenschutz-Hinweise <ChevronRight className="size-4" aria-hidden />
+        </Link>
+      </Card>
+    </div>
+  );
+}
+
+/* -------------------- Sub-primitives -------------------- */
+
+function Card({
+  title,
+  eyebrow,
+  children,
+}: {
+  title: string;
+  eyebrow?: string;
+  children: ReactNode;
+}) {
+  return (
+    <article className="rounded-2xl border border-ink-100 bg-surface-0 p-5 shadow-soft">
+      {eyebrow ? (
+        <p className="text-[11px] uppercase tracking-wider text-ink-400">{eyebrow}</p>
+      ) : null}
+      <h2 className="mt-1 text-base font-semibold tracking-tight text-ink-900">{title}</h2>
+      <div className="mt-4">{children}</div>
+    </article>
+  );
+}
+
+function PilotBanner() {
+  return (
+    <div className="flex items-start gap-4 rounded-2xl border border-accent-100 bg-accent-50/60 p-5 text-accent-900">
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-500 text-white">
+        <Sparkles className="size-5" aria-hidden />
+      </span>
+      <div className="flex-1">
+        <p className="text-sm font-medium">Du bist im Pilot-Workspace.</p>
+        <p className="mt-1 text-sm text-accent-800">
+          Diese Ansicht ist eine Vorschau. Live-Sitzung mit Audio, KI-Doku und
+          Berichts-Generator folgen in Phase 6 + 7 — sobald das Datenschutzkonzept finalisiert ist.
+        </p>
+      </div>
+      <ShieldCheck className="hidden size-5 shrink-0 text-accent-600 sm:block" aria-hidden />
+    </div>
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  body,
+  cta,
+}: {
+  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  title: string;
+  body: string;
+  cta?: { label: string; to: string };
+}) {
+  return (
+    <div className="rounded-3xl border border-dashed border-ink-200 bg-surface-0 p-12 text-center">
+      <span className="mx-auto inline-grid size-14 place-items-center rounded-2xl bg-accent-50 text-accent-700 ring-1 ring-accent-100">
+        <Icon className="size-6" aria-hidden />
+      </span>
+      <h2 className="mt-5 font-display text-2xl font-medium tracking-tight text-ink-900">
+        {title}
+      </h2>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-500">{body}</p>
+      {cta ? (
+        <Link
+          to={cta.to}
+          className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ink-900 px-5 text-sm font-medium text-surface-50 hover:bg-ink-800"
+        >
+          {cta.label}
+          <ChevronRight className="size-4" aria-hidden />
+        </Link>
+      ) : null}
+    </div>
+  );
+}

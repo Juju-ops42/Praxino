@@ -7,15 +7,15 @@ export const isSupabaseConfigured: boolean = Boolean(url && anonKey);
 
 /**
  * Supabase Client. `null`, wenn die ENV-Variablen noch nicht gesetzt sind —
- * die App soll dann nicht crashen, sondern einen Mock-Pfad nehmen
- * (z. B. Waitlist-Submit lokal als Erfolg darstellen).
+ * die App soll dann nicht crashen, sondern Mock-Pfade nehmen.
  */
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(url as string, anonKey as string, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false,
+        detectSessionInUrl: true,
+        flowType: "pkce",
       },
       global: {
         headers: {
