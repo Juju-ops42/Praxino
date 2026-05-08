@@ -89,11 +89,13 @@ export function LoginPage() {
         <div className="flex flex-1 items-center">
           <div className="mx-auto w-full max-w-md py-12">
             <h1 className="font-display text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl text-balance">
-              Willkommen zurück.
+              Anmelden oder Praxis anlegen.
             </h1>
             <p className="mt-3 text-[15px] leading-relaxed text-ink-500">
-              Melde dich mit deiner E-Mail an. Wir schicken dir einen Magic Link
-              und einen 6-stelligen Code — beides funktioniert.
+              Gib deine E-Mail ein. Wir schicken einen Magic Link{" "}
+              <strong className="text-ink-700">und</strong> einen 6-stelligen
+              Code — beides funktioniert. Neu hier? Wir legen automatisch einen
+              Account für dich an und führen dich kurz durchs Setup.
             </p>
 
             {isUnconfigured ? (

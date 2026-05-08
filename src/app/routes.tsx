@@ -9,12 +9,15 @@ import { ProductPage } from "@/pages/ProductPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { Protected } from "@/components/Protected";
 
-// Lazy-load schwere Routes (App-Workspace, Login). Hält den initial Bundle klein.
+// Lazy-load schwere Routes (App-Workspace, Login, Onboarding).
 const AppHomePage = lazy(() =>
   import("@/pages/AppHomePage").then((m) => ({ default: m.AppHomePage })),
 );
 const LoginPage = lazy(() =>
   import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })),
+);
+const OnboardingPage = lazy(() =>
+  import("@/pages/OnboardingPage").then((m) => ({ default: m.OnboardingPage })),
 );
 
 function RouteFallback() {
@@ -35,6 +38,14 @@ export function AppRoutes() {
         <Route path="/produkt" element={<ProductPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/imprint" element={<ImprintPage />} />
+        <Route
+          path="/onboarding"
+          element={
+            <Protected requireOnboarded={false}>
+              <OnboardingPage />
+            </Protected>
+          }
+        />
         <Route
           path="/app"
           element={
