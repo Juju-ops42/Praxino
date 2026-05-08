@@ -44,18 +44,17 @@ export function StoryTeaserSection() {
                 aria-hidden
                 className="grid size-10 place-items-center rounded-full bg-accent-50 text-[12px] font-semibold text-accent-700 ring-1 ring-accent-100"
               >
-                L. M.
+                T
               </span>
               <div>
-                <p className="text-sm font-medium text-ink-900">Lina M.</p>
+                <p className="text-sm font-medium text-ink-900">
+                  Eine befreundete Therapeutin
+                </p>
                 <p className="text-[12px] text-ink-500">
-                  Logopädin · Co-Founder
+                  Sonntag-Abend in der Küche, an dem alles begann
                 </p>
               </div>
             </figcaption>
-            <span className="absolute -top-3 right-7 rounded-full bg-creme-100 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-ink-700 ring-1 ring-creme-200/60">
-              Sonntag-Abend
-            </span>
           </figure>
         </Reveal>
       </div>

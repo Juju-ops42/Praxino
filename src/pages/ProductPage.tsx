@@ -27,6 +27,7 @@ import {
 import { PageShell } from "@/components/layout/PageShell";
 import { Section, SectionHeading, Eyebrow } from "@/components/ui/Section";
 import { Reveal, RevealStagger, RevealItem } from "@/components/ui/Reveal";
+import { RoadmapSection } from "@/components/landing/RoadmapSection";
 import { cn } from "@/lib/utils";
 
 export function ProductPage() {
@@ -40,6 +41,7 @@ export function ProductPage() {
       <PersonasSection />
       <FeaturesSection />
       <ComparisonSection />
+      <RoadmapSection />
       <ClosingCTA />
     </PageShell>
   );

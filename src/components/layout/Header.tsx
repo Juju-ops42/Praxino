@@ -7,10 +7,9 @@ import { useAuth } from "@/lib/auth";
 
 const navItems = [
   { label: "Produkt", href: "/produkt" },
-  { label: "Roadmap", href: "/#roadmap" },
+  { label: "Pricing", href: "/#pricing" },
   { label: "FAQ", href: "/#faq" },
   { label: "Team", href: "/team" },
-  { label: "Pricing", href: "/#pricing" },
 ];
 
 export function Header() {

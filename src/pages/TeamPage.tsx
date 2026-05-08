@@ -30,33 +30,30 @@ type Founder = {
 
 const founders: Founder[] = [
   {
-    initials: "L. M.",
-    name: "Lina M.",
-    role: "Logopädin · Co-Founder",
-    bio:
-      "Vier Jahre in einer Heilmittel-Praxis. Verbringt bis heute zwei Abende pro Woche mit Berichten — und weiß, wie sich das anfühlt, wenn Doku frisst, wofür man eigentlich Therapeut:in geworden ist.",
+    initials: "JW",
+    name: "Julian Wiebke",
+    role: "Product · Co-Founder",
+    bio: "Verantwortlich für Produkt, Design und Engineering. Baut seit Jahren Werkzeuge, mit denen Profis schneller und sauberer arbeiten. Bio wird ergänzt.",
     quote:
-      "Ich will keine Berichte schreiben, die ein Algorithmus auch hätte schreiben können. Ich will mit Menschen arbeiten.",
-    accent: "teal",
-  },
-  {
-    initials: "J. W.",
-    name: "Julian W.",
-    role: "Product & Engineering · Co-Founder",
-    bio:
-      "Baut seit Jahren Werkzeuge, mit denen Profis schneller arbeiten. In der Familie eine Therapeutin — Praxino entstand am Küchentisch, nach dem hundertsten Bericht-Wochenende.",
-    quote:
-      "Praxino soll sich nicht wie ein KI-Tool anfühlen. Sondern wie eine Kollegin, die mitschreibt.",
+      "Praxino soll sich nicht wie ein KI-Tool anfühlen — sondern wie eine Kollegin, die mitschreibt.",
     accent: "ink",
   },
   {
-    initials: "M. R.",
-    name: "Max R.",
-    role: "Design · Co-Founder",
-    bio:
-      "Zehn Jahre Design im Healthcare-Tech-Umfeld. Glaubt, dass gute Software in der Praxis nicht auffällt — sondern einfach funktioniert. Schimpft regelmäßig über Krankenhaus-IT.",
+    initials: "DM",
+    name: "Damian Mos",
+    role: "Operations · Co-Founder",
+    bio: "Sorgt dafür, dass aus einer Idee eine Praxis-taugliche Software wird — vom ersten Pilot-Onboarding bis zum täglichen Betrieb. Bio wird ergänzt.",
     quote:
-      "Wir bauen kein Cockpit. Wir bauen ein Werkzeug, das man morgens reinklappt und abends zuklappt.",
+      "Operations heißt: dafür sorgen, dass jede Praxis Praxino am Tag 1 produktiv nutzen kann.",
+    accent: "teal",
+  },
+  {
+    initials: "DM",
+    name: "Dominic Mikowitsch",
+    role: "Sales · Co-Founder",
+    bio: "Spricht täglich mit Praxen, die zu viel Zeit mit Doku verbringen — und übersetzt zwischen Therapie-Alltag und Produkt. Bio wird ergänzt.",
+    quote:
+      "Wir verkaufen nicht Software. Wir geben Therapeut:innen ihre Abende zurück.",
     accent: "creme",
   },
 ];
@@ -82,14 +79,13 @@ export function TeamPage() {
 
 function PlaceholderBanner() {
   return (
-    <div className="border-b border-amber-100 bg-amber-50">
-      <div className="mx-auto flex w-full max-w-7xl items-start gap-3 px-6 py-3 text-[13px] text-amber-800 lg:px-10">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+    <div className="border-b border-creme-200 bg-creme-50">
+      <div className="mx-auto flex w-full max-w-7xl items-start gap-3 px-6 py-3 text-[13px] text-ink-700 lg:px-10">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
         <p>
-          <strong className="font-semibold">Story-Skelett.</strong> Namen,
-          Bios und Zitate sind Platzhalter — bitte vor Marktstart in{" "}
-          <code className="rounded bg-amber-100 px-1 py-0.5 text-[12px]">src/pages/TeamPage.tsx → founders</code>{" "}
-          mit echten Founder-Daten ersetzen.
+          <strong className="font-semibold">Bios in Arbeit.</strong> Die
+          Co-Founder-Namen stimmen — die Bios und Zitate werden noch ersetzt
+          (in <code className="rounded bg-creme-100 px-1 py-0.5 text-[12px]">src/pages/TeamPage.tsx → founders</code>).
         </p>
       </div>
     </div>
@@ -136,7 +132,7 @@ function StoryBlock() {
   const paragraphs: Array<{ kicker?: string; body: string }> = [
     {
       kicker: "Sonntag-Abend, Küche, ein Glas Wein.",
-      body: `Lina hatte gerade den vierten Therapiebericht des Wochenendes geschrieben. „Ich verbringe mehr Zeit mit Doku als mit Patient:innen", sagte sie. „Und niemand baut etwas, das das wirklich ändert." Julian und Max nickten. Und stellten die falsche Frage: Warum nicht?`,
+      body: `Eine befreundete Therapeutin hatte gerade den vierten Therapiebericht des Wochenendes geschrieben. „Ich verbringe mehr Zeit mit Doku als mit Patient:innen", sagte sie. „Und niemand baut etwas, das das wirklich ändert." Wir nickten. Und stellten die falsche Frage: Warum nicht?`,
     },
     {
       body:
@@ -183,12 +179,12 @@ function FounderGrid() {
         <div className="max-w-3xl">
           <Eyebrow>Wer wir sind</Eyebrow>
           <h2 className="mt-5 font-display text-[2.2rem] font-medium leading-[1.1] tracking-[-0.025em] text-ink-900 sm:text-[2.6rem] text-balance">
-            Eine Logopädin, ein Engineer, ein Designer.
+            Drei Co-Founder. Product, Operations, Sales.
           </h2>
           <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-ink-500">
-            Wir kennen uns seit Jahren. Wir streiten gerne. Und wir sind uns einig
-            in einem: Therapeut:innen verdienen Werkzeuge, die mit ihrem Beruf
-            mitdenken — nicht gegen ihn.
+            Wir kennen uns seit Jahren, streiten gerne, und sind uns einig in einem:
+            Therapeut:innen verdienen Werkzeuge, die mit ihrem Beruf mitdenken —
+            nicht gegen ihn.
           </p>
         </div>
       </Reveal>
