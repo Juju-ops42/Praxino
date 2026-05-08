@@ -61,7 +61,7 @@ const navSections: NavSection[] = [
       { id: "today", label: "Heute", icon: LayoutDashboard },
       { id: "patients", label: "Patient:innen", icon: Users },
       { id: "sessions", label: "Sitzungen", icon: AudioLines },
-      { id: "reports", label: "Berichte", icon: FileSignature, badge: "3" },
+      { id: "reports", label: "Berichte", icon: FileSignature },
     ],
   },
   {
