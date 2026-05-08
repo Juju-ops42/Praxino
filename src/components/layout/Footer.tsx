@@ -8,6 +8,7 @@ const productLinks = [
 ];
 
 const companyLinks = [
+  { label: "Team", to: "/team" },
   { label: "Datenschutz", to: "/privacy" },
   { label: "Impressum", to: "/imprint" },
 ];

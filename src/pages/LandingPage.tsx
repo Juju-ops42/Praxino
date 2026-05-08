@@ -8,6 +8,7 @@ import { ProductPreviewSection } from "@/components/landing/ProductPreviewSectio
 import { WhyNowSection } from "@/components/landing/WhyNowSection";
 import { PrivacySection } from "@/components/landing/PrivacySection";
 import { PricingSection } from "@/components/landing/PricingSection";
+import { StoryTeaserSection } from "@/components/landing/StoryTeaserSection";
 import { WaitlistSection } from "@/components/landing/WaitlistSection";
 
 export function LandingPage() {
@@ -25,6 +26,7 @@ export function LandingPage() {
       <WhyNowSection />
       <PrivacySection />
       <PricingSection />
+      <StoryTeaserSection />
       <WaitlistSection />
     </PageShell>
   );
