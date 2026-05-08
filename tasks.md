@@ -232,30 +232,31 @@ Priorität: Niedrig
 ## Phase 3 — App-Shell
 
 ### P3-001 — `/app`-Layout mit Sidebar + Topbar
-Status: `[ ]`
+Status: `[x]`
 Priorität: Hoch
 
-**Ziel:** Echte App-Hülle, keine Marketing-Seite.
 **Akzeptanzkriterien:**
-- Sidebar mit Patient:innen / Sitzungen / Berichte / Einstellungen.
-- Topbar mit Praxisname, User-Menu (Platzhalter).
-- Responsive: Sidebar collabsbar.
+- Sidebar mit Heute · Patient:innen · Sitzungen · Berichte · Einstellungen. *(✓)*
+- Topbar mit Breadcrumb + Neu-Button. *(✓)*
+- Responsive: auf < lg horizontale Tab-Bar statt Sidebar. *(✓)*
+**Dateien:** `src/pages/AppHomePage.tsx`.
 
 ### P3-002 — Dashboard-Placeholder mit echten Empty-States
-Status: `[ ]`
+Status: `[x]`
 Priorität: Hoch
 
 **Akzeptanzkriterien:**
-- Empty-States haben gutes Wording („Noch keine Sitzungen geplant").
-- Keine grauen Tabellen.
+- Empty-States haben gutes Wording. *(✓ z. B. „Noch keine Sitzung gestartet" mit Verweis auf Phase 6)*
+- Keine grauen Tabellen. *(✓ Patient:innen-Tabelle mit Initialen-Avatars und Status-Badges)*
 
 ### P3-003 — Auth-Gate vorbereiten (`<Protected>`)
-Status: `[ ]`
+Status: `[x]`
 Priorität: Hoch
 
 **Akzeptanzkriterien:**
-- `Protected`-Komponente, die ohne Session zur `/login` umleitet.
-- Stub-`useSession`-Hook.
+- `Protected`-Komponente, die ohne Session zur `/login` umleitet. *(✓ mit `from`-State für Post-Login-Redirect)*
+- `useAuth`-Hook (statt useSession). *(✓ via `AuthProvider`)*
+**Dateien:** `src/components/Protected.tsx`, `src/lib/auth.tsx`.
 
 ### P3-004 — TanStack Query installieren + konfigurieren
 Status: `[ ]`
@@ -279,9 +280,16 @@ Priorität: Mittel
 ## Phase 4 — Auth & Praxis-Struktur
 
 ### P4-001 — Supabase-Auth (E-Mail OTP)
-Status: `[ ]`
+Status: `[x]`
 Priorität: Hoch
-**Dateien:** `src/lib/auth.ts`, `src/pages/LoginPage.tsx`.
+**Akzeptanzkriterien:**
+- Magic Link via `signInWithOtp` *(✓)*
+- 6-stelliger OTP-Code via `verifyOtp` als Alternative *(✓)*
+- `flowType: pkce` für sichere Magic-Link-Callbacks *(✓)*
+- Logout via `signOut` (UserMenu im Header + Sidebar-Footer in /app) *(✓)*
+- Auto-Redirect zu /login bei abgelaufener Session *(✓ via `<Protected>`)*
+**Dateien:** `src/lib/auth.tsx`, `src/lib/supabase.ts`, `src/pages/LoginPage.tsx`,
+`src/components/Protected.tsx`, `src/components/layout/Header.tsx`.
 
 ### P4-002 — Migration `profiles`
 Status: `[ ]`

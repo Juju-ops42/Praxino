@@ -85,9 +85,25 @@ anonyme Inserts (kein Read für anon).
 | Route       | Inhalt |
 |-------------|--------|
 | `/`         | Landingpage |
+| `/login`    | Login mit Supabase Magic Link / 6-stelligem OTP-Code |
 | `/privacy`  | Datenschutz (Platzhalter — vor Produktivbetrieb juristisch prüfen) |
 | `/imprint`  | Impressum (Platzhalter — vor Produktivbetrieb juristisch prüfen) |
-| `/app`      | Platzhalter-Shell für die spätere Webapp |
+| `/app`      | Workspace (Sidebar + Topbar, Heute / Patient:innen / Sitzungen / Berichte / Einstellungen) — `<Protected>`-Gate, redirect zu `/login` ohne Session |
+
+## Auth-Flow
+
+Praxino nutzt Supabase Magic Link Auth (`signInWithOtp`):
+
+1. Nutzer:in gibt E-Mail in `/login` ein.
+2. Supabase sendet eine E-Mail mit Magic Link **und** 6-stelligem Code.
+3. Klick auf den Link → Redirect zu `/app`, Session wird automatisch erkannt
+   (`detectSessionInUrl: true`, `flowType: pkce`).
+4. Alternativ: Code in der UI eingeben → `verifyOtp`.
+5. Logout über UserMenu im Header oder im App-Sidebar-Footer.
+
+Wichtig: Im Supabase Dashboard unter *Authentication → URL Configuration* die
+Site-URL und Redirect-URLs setzen (z. B. `https://praxino.de`,
+`https://*.vercel.app/app`, `http://localhost:5173/app`).
 
 ## Projektstruktur
 
