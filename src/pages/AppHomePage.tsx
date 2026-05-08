@@ -18,7 +18,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FieldShell, Input, Select } from "@/components/ui/Input";
 import { useAuth } from "@/lib/auth";
@@ -41,6 +40,16 @@ import {
   type SessionWithPatient,
   type TherapySession,
 } from "@/lib/session";
+import {
+  countOpenReports,
+  createReport,
+  fetchPracticeReports,
+  REPORT_STATUS_LABEL,
+  REPORT_TYPE_LABEL,
+  type ReportStatus,
+  type ReportType,
+  type ReportWithPatient,
+} from "@/lib/report";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2, X } from "lucide-react";
 
@@ -290,6 +299,7 @@ function TodayPanel() {
   const auth = useAuth();
   const demoMode = !isSupabaseConfigured;
   const [stats, setStats] = useState<SessionStats>({ today: 0, thisWeek: 0, signed: 0 });
+  const [openReports, setOpenReports] = useState(0);
   const [todayList, setTodayList] = useState<SessionWithPatient[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -305,13 +315,15 @@ function TodayPanel() {
         const practices = await fetchUserPractices(auth.user.id);
         const first = practices[0];
         if (!first) return;
-        const [s, sessions] = await Promise.all([
+        const [s, sessions, openCount] = await Promise.all([
           fetchPracticeSessionStats(first.id),
           fetchTodaysSessions(first.id),
+          countOpenReports(first.id),
         ]);
         if (cancelled) return;
         setStats(s);
         setTodayList(sessions);
+        setOpenReports(openCount);
       } catch {
         // fail silent — Today-Panel ist kein blocker
       } finally {
@@ -332,7 +344,7 @@ function TodayPanel() {
       ]
     : [
         { label: "Sitzungen heute", value: String(stats.today), icon: AudioLines },
-        { label: "Offene Berichte", value: "—", icon: Inbox },
+        { label: "Offene Berichte", value: String(openReports), icon: Inbox },
         { label: "Diese Woche", value: String(stats.thisWeek), icon: CalendarRange },
         { label: "Freigegeben gesamt", value: String(stats.signed), icon: ChartLine },
       ];
@@ -1532,39 +1544,321 @@ function NoPatientsState() {
 }
 
 function ReportsPanel() {
-  const reports = [
-    { ini: "M.K.", type: "Verlängerungsantrag", state: "Entwurf", date: "2026-05-08" },
-    { ini: "L.S.", type: "Therapiebericht", state: "Bereit", date: "2026-05-07" },
-    { ini: "T.B.", type: "Befundbericht", state: "Geprüft", date: "2026-05-06" },
-    { ini: "F.R.", type: "MDK-Stellungnahme", state: "Bereit", date: "2026-05-05" },
-  ];
+  const auth = useAuth();
+  const demoMode = !isSupabaseConfigured;
+  const [practice, setPractice] = useState<Practice | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [reports, setReports] = useState<ReportWithPatient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | undefined>();
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const refresh = async (practiceId: string) => {
+    try {
+      setError(undefined);
+      const list = await fetchPracticeReports(practiceId);
+      setReports(list);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler beim Laden.");
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (demoMode || !auth.user) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const list = await fetchUserPractices(auth.user.id);
+        if (cancelled) return;
+        const first = list[0] ?? null;
+        setPractice(first);
+        if (first) {
+          const [p] = await Promise.all([fetchPatients(first.id)]);
+          if (!cancelled) {
+            setPatients(p);
+            await refresh(first.id);
+          }
+        }
+      } catch (err) {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Daten konnten nicht geladen werden.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.user, demoMode]);
+
   return (
     <div className="space-y-8">
       <PanelHeader
         title="Berichte"
         description="Therapie-, Verlängerungs-, Befund- und MDK-Berichte. Strukturiert, prüfbar, freigabefähig."
-      />
-      <ul className="grid gap-3">
-        {reports.map((r) => (
-          <li
-            key={r.ini + r.type + r.date}
-            className="flex items-center gap-4 rounded-2xl border border-ink-100 bg-surface-0 p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card"
+        actions={
+          <Button
+            type="button"
+            disabled={demoMode || !practice || patients.length === 0}
+            onClick={() => setCreateOpen((v) => !v)}
           >
-            <span className="grid size-10 place-items-center rounded-xl bg-accent-50 text-accent-700 ring-1 ring-accent-100">
-              <FileSignature className="size-5" aria-hidden />
-            </span>
-            <div className="flex-1">
-              <p className="text-[14.5px] font-medium text-ink-900">{r.type}</p>
-              <p className="text-[12px] text-ink-500">
-                Pat. {r.ini} · {r.date}
-              </p>
-            </div>
-            <Badge tone={r.state === "Entwurf" ? "warning" : "success"}>{r.state}</Badge>
-            <ChevronRight className="size-4 text-ink-300" aria-hidden />
-          </li>
-        ))}
-      </ul>
+            {createOpen ? <X className="size-4" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+            {createOpen ? "Abbrechen" : "Bericht erstellen"}
+          </Button>
+        }
+      />
+
+      {demoMode ? <DemoBanner /> : null}
+      {!demoMode && !loading && !practice ? <NoPracticeState /> : null}
+      {!demoMode && !loading && practice && patients.length === 0 ? (
+        <NoPatientsState />
+      ) : null}
+
+      {createOpen && practice && auth.user ? (
+        <CreateReportForm
+          practiceId={practice.id}
+          userId={auth.user.id}
+          patients={patients}
+          onCancel={() => setCreateOpen(false)}
+          onCreated={async () => {
+            setCreateOpen(false);
+            await refresh(practice.id);
+          }}
+        />
+      ) : null}
+
+      {loading ? (
+        <PanelLoading />
+      ) : (
+        <ReportsList reports={demoMode ? DEMO_REPORTS : reports} />
+      )}
+
+      {error ? (
+        <p role="alert" className="text-sm text-rose-600">
+          {error}
+        </p>
+      ) : null}
     </div>
+  );
+}
+
+interface DemoReport {
+  id: string;
+  type: ReportType;
+  patient_initials: string;
+  status: ReportStatus;
+  updated_at: string;
+  title: string;
+}
+
+const DEMO_REPORTS: DemoReport[] = [
+  {
+    id: "r1",
+    type: "verlaengerung",
+    patient_initials: "M.K.",
+    status: "draft",
+    updated_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
+    title: "Verlängerung um 10 Einheiten",
+  },
+  {
+    id: "r2",
+    type: "therapie",
+    patient_initials: "L.S.",
+    status: "in_review",
+    updated_at: new Date(Date.now() - 26 * 3600_000).toISOString(),
+    title: "Therapiebericht Q3",
+  },
+  {
+    id: "r3",
+    type: "befund",
+    patient_initials: "T.B.",
+    status: "signed",
+    updated_at: new Date(Date.now() - 52 * 3600_000).toISOString(),
+    title: "Befundbericht Erstaufnahme",
+  },
+];
+
+function ReportsList({
+  reports,
+}: {
+  reports: Array<ReportWithPatient | DemoReport>;
+}) {
+  if (reports.length === 0) {
+    return (
+      <div className="rounded-3xl border border-dashed border-ink-200 bg-surface-0 p-10 text-center">
+        <p className="font-display text-lg text-ink-700">Noch keine Berichte.</p>
+        <p className="mt-1.5 text-sm text-ink-500">
+          Klick „Bericht erstellen" und leg deinen ersten Entwurf an.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <ul className="grid gap-3">
+      {reports.map((r) => (
+        <li
+          key={r.id}
+          className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 rounded-2xl border border-ink-100 bg-surface-0 p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card"
+        >
+          <span className="grid size-10 place-items-center rounded-xl bg-accent-50 text-accent-700 ring-1 ring-accent-100">
+            <FileSignature className="size-5" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[14.5px] font-medium text-ink-900">
+              {REPORT_TYPE_LABEL[r.type]}
+              <span className="ml-2 text-ink-400">·</span>
+              <span className="ml-2 text-ink-700">{r.title}</span>
+            </p>
+            <p className="text-[12px] text-ink-500">
+              Pat. {r.patient_initials ?? "—"} · zuletzt {formatSessionDate(r.updated_at)}
+            </p>
+          </div>
+          <ReportStatusBadge status={r.status} />
+          <ChevronRight className="size-4 text-ink-300" aria-hidden />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ReportStatusBadge({ status }: { status: ReportStatus }) {
+  const map: Record<ReportStatus, string> = {
+    draft: "bg-amber-50 text-amber-700 ring-amber-100",
+    in_review: "bg-sky-50 text-sky-700 ring-sky-100",
+    signed: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    exported: "bg-accent-50 text-accent-700 ring-accent-100",
+  };
+  return (
+    <span className={cn("rounded-full px-2 py-0.5 text-[11px] ring-1", map[status])}>
+      {REPORT_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+function CreateReportForm({
+  practiceId,
+  userId,
+  patients,
+  onCancel,
+  onCreated,
+}: {
+  practiceId: string;
+  userId: string;
+  patients: Patient[];
+  onCancel: () => void;
+  onCreated: () => void | Promise<void>;
+}) {
+  const [type, setType] = useState<ReportType>("therapie");
+  const [patientId, setPatientId] = useState(patients[0]?.id ?? "");
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | undefined>();
+
+  async function submit() {
+    if (!patientId) {
+      setErrorMsg("Bitte Patient:in wählen.");
+      return;
+    }
+    if (!title.trim()) {
+      setErrorMsg("Titel fehlt.");
+      return;
+    }
+    setBusy(true);
+    setErrorMsg(undefined);
+    try {
+      await createReport(
+        {
+          practice_id: practiceId,
+          patient_id: patientId,
+          type,
+          title,
+          status: "draft",
+        },
+        userId,
+      );
+      await onCreated();
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : "Bericht konnte nicht angelegt werden.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+      className="rounded-2xl border border-ink-100 bg-surface-0 p-6 shadow-soft"
+    >
+      <p className="text-[11px] uppercase tracking-wider text-ink-400">
+        Bericht erstellen
+      </p>
+      <h3 className="mt-1 text-base font-semibold tracking-tight text-ink-900">
+        Vorlage wählen, Titel geben — Inhalte folgen im Editor
+      </h3>
+
+      <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <FieldShell id="rtype" label="Vorlage" required>
+          <Select
+            id="rtype"
+            value={type}
+            onChange={(e) => setType(e.target.value as ReportType)}
+          >
+            <option value="therapie">Therapiebericht</option>
+            <option value="verlaengerung">Verlängerungsantrag</option>
+            <option value="befund">Befundbericht</option>
+            <option value="mdk">MDK-Stellungnahme</option>
+          </Select>
+        </FieldShell>
+        <FieldShell id="rpat" label="Patient:in" required>
+          <Select
+            id="rpat"
+            value={patientId}
+            onChange={(e) => setPatientId(e.target.value)}
+          >
+            {patients.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.initials}
+                {p.indication ? ` · ${p.indication}` : ""}
+              </option>
+            ))}
+          </Select>
+        </FieldShell>
+        <div className="sm:col-span-2 lg:col-span-1">
+          <FieldShell id="rtitle" label="Titel" required>
+            <Input
+              id="rtitle"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Verlängerung um 10 Einheiten"
+            />
+          </FieldShell>
+        </div>
+      </div>
+
+      {errorMsg ? (
+        <p role="alert" className="mt-4 text-sm text-rose-600">
+          {errorMsg}
+        </p>
+      ) : null}
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+          Abbrechen
+        </Button>
+        <Button type="submit" loading={busy}>
+          Als Entwurf anlegen
+        </Button>
+      </div>
+    </form>
   );
 }
 
