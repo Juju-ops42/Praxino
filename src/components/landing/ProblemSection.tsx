@@ -2,6 +2,7 @@ import { Clock, FileWarning, Moon, ChevronRight } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { Section, SectionHeading } from "@/components/ui/Section";
 import { Reveal, RevealStagger, RevealItem } from "@/components/ui/Reveal";
+import { CountUp } from "@/components/ui/CountUp";
 
 export function ProblemSection() {
   return (
@@ -100,23 +101,9 @@ function TimeBar() {
         </div>
 
         <div className="mt-7 grid grid-cols-3 gap-3">
-          {[
-            { label: "Doku-Quote", value: "≈ 40%" },
-            { label: "Pro Woche", value: "≈ 6 h" },
-            { label: "Pro Jahr", value: "≈ 270 h" },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="rounded-xl bg-surface-0 p-3 ring-1 ring-ink-100 text-center"
-            >
-              <p className="font-display text-xl font-medium tracking-tight text-ink-900">
-                {s.value}
-              </p>
-              <p className="mt-0.5 text-[10.5px] uppercase tracking-wider text-ink-400">
-                {s.label}
-              </p>
-            </div>
-          ))}
+          <StatTile label="Doku-Quote" value={40} suffix="%" prefix="≈ " />
+          <StatTile label="Pro Woche" value={6} suffix=" h" prefix="≈ " />
+          <StatTile label="Pro Jahr" value={270} suffix=" h" prefix="≈ " />
         </div>
         <p className="mt-4 text-[11px] text-ink-400">
           Indikative Werte — Praxen variieren stark. Fachliteratur und Pilot-Gespräche
@@ -162,6 +149,29 @@ function Lane({
           className={`block h-full rounded-full ${fillClass}`}
         />
       </div>
+    </div>
+  );
+}
+
+function StatTile({
+  label,
+  value,
+  prefix,
+  suffix,
+}: {
+  label: string;
+  value: number;
+  prefix?: string;
+  suffix?: string;
+}) {
+  return (
+    <div className="rounded-xl bg-surface-0 p-3 text-center ring-1 ring-ink-100">
+      <p className="font-display text-xl font-medium tracking-tight text-ink-900">
+        <CountUp to={value} prefix={prefix} suffix={suffix} duration={1.4} />
+      </p>
+      <p className="mt-0.5 text-[10.5px] uppercase tracking-wider text-ink-400">
+        {label}
+      </p>
     </div>
   );
 }
