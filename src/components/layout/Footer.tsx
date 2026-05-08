@@ -2,9 +2,10 @@ import { Link } from "react-router-dom";
 import { Logo } from "@/components/ui/Logo";
 
 const productLinks = [
+  { label: "Produkt-Übersicht", href: "/produkt" },
   { label: "Pilot werden", href: "/#pilot" },
-  { label: "Produkt-Vorschau", href: "/#produkt" },
-  { label: "Datenschutz-Konzept", href: "/#datenschutz" },
+  { label: "Roadmap", href: "/#roadmap" },
+  { label: "FAQ", href: "/#faq" },
 ];
 
 const companyLinks = [

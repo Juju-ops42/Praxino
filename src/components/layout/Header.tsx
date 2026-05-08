@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 
 const navItems = [
-  { label: "Produkt", href: "/#produkt" },
+  { label: "Produkt", href: "/produkt" },
   { label: "Roadmap", href: "/#roadmap" },
   { label: "FAQ", href: "/#faq" },
   { label: "Team", href: "/team" },

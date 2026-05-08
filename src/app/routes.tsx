@@ -5,6 +5,7 @@ import { LandingPage } from "@/pages/LandingPage";
 import { PrivacyPage } from "@/pages/PrivacyPage";
 import { ImprintPage } from "@/pages/ImprintPage";
 import { TeamPage } from "@/pages/TeamPage";
+import { ProductPage } from "@/pages/ProductPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { Protected } from "@/components/Protected";
 
@@ -31,6 +32,7 @@ export function AppRoutes() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/team" element={<TeamPage />} />
+        <Route path="/produkt" element={<ProductPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/imprint" element={<ImprintPage />} />
         <Route
