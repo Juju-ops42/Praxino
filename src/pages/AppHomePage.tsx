@@ -34,6 +34,9 @@ import {
   createSession,
   fetchPatientSessions,
   fetchPracticeSessions,
+  fetchPracticeSessionStats,
+  fetchTodaysSessions,
+  type SessionStats,
   type SessionStatus,
   type SessionWithPatient,
   type TherapySession,
@@ -284,23 +287,70 @@ function PanelHeader({
 }
 
 function TodayPanel() {
-  const stats = [
-    { label: "Sitzungen heute", value: "8", icon: AudioLines },
-    { label: "Offene Berichte", value: "3", icon: Inbox },
-    { label: "Diese Woche", value: "42", icon: CalendarRange },
-    { label: "Bereit zum Export", value: "12", icon: ChartLine },
-  ];
+  const auth = useAuth();
+  const demoMode = !isSupabaseConfigured;
+  const [stats, setStats] = useState<SessionStats>({ today: 0, thisWeek: 0, signed: 0 });
+  const [todayList, setTodayList] = useState<SessionWithPatient[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (demoMode || !auth.user) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const practices = await fetchUserPractices(auth.user.id);
+        const first = practices[0];
+        if (!first) return;
+        const [s, sessions] = await Promise.all([
+          fetchPracticeSessionStats(first.id),
+          fetchTodaysSessions(first.id),
+        ]);
+        if (cancelled) return;
+        setStats(s);
+        setTodayList(sessions);
+      } catch {
+        // fail silent — Today-Panel ist kein blocker
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.user, demoMode]);
+
+  const statTiles = demoMode
+    ? [
+        { label: "Sitzungen heute", value: "8", icon: AudioLines },
+        { label: "Offene Berichte", value: "3", icon: Inbox },
+        { label: "Diese Woche", value: "42", icon: CalendarRange },
+        { label: "Bereit zum Export", value: "12", icon: ChartLine },
+      ]
+    : [
+        { label: "Sitzungen heute", value: String(stats.today), icon: AudioLines },
+        { label: "Offene Berichte", value: "—", icon: Inbox },
+        { label: "Diese Woche", value: String(stats.thisWeek), icon: CalendarRange },
+        { label: "Freigegeben gesamt", value: String(stats.signed), icon: ChartLine },
+      ];
+
+  const upcoming = demoMode
+    ? DEMO_UPCOMING
+    : todayList.map((s) => ({
+        ini: s.patient_initials ?? "—",
+        indikation: s.patient_indication ?? "Sitzung",
+        time: formatTime(s.occurred_at),
+        duration: `${s.duration_minutes} Min.`,
+      }));
+
   const queue = [
     { ini: "M.K.", what: "Verlängerungsantrag", state: "Entwurf", warn: true },
     { ini: "L.S.", what: "Therapiebericht Q3", state: "Bereit", warn: false },
     { ini: "T.B.", what: "Befundbericht", state: "Geprüft", warn: false },
     { ini: "F.R.", what: "MDK-Stellungnahme", state: "Bereit", warn: false },
-  ];
-  const upcoming = [
-    { ini: "M.K.", indikation: "Stimmstörung", time: "10:00", duration: "45 Min." },
-    { ini: "L.S.", indikation: "Aphasie", time: "10:45", duration: "45 Min." },
-    { ini: "T.B.", indikation: "Artikulation", time: "11:30", duration: "30 Min." },
-    { ini: "F.R.", indikation: "Schluckstörung", time: "13:15", duration: "60 Min." },
   ];
 
   return (
@@ -314,7 +364,7 @@ function TodayPanel() {
 
       <section>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {stats.map((s) => (
+          {statTiles.map((s) => (
             <div
               key={s.label}
               className="rounded-2xl border border-ink-100 bg-surface-0 p-4 shadow-soft"
@@ -324,7 +374,11 @@ function TodayPanel() {
                 {s.label}
               </div>
               <p className="mt-1.5 font-display text-3xl font-medium tracking-tight text-ink-900">
-                {s.value}
+                {loading && !demoMode ? (
+                  <Loader2 className="size-5 animate-spin text-ink-300" aria-hidden />
+                ) : (
+                  s.value
+                )}
               </p>
             </div>
           ))}
@@ -333,23 +387,36 @@ function TodayPanel() {
 
       <section className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         <Card title="Heutige Sitzungen" eyebrow="Termine">
-          <ul className="divide-y divide-ink-100">
-            {upcoming.map((u) => (
-              <li key={u.ini + u.time} className="flex items-center gap-4 py-3">
-                <span className="grid size-9 place-items-center rounded-full bg-accent-100 text-[11px] font-semibold text-accent-700">
-                  {u.ini}
-                </span>
-                <div className="flex-1">
-                  <p className="text-[13.5px] font-medium text-ink-900">Pat. {u.ini}</p>
-                  <p className="text-[12px] text-ink-500">{u.indikation}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[13px] font-medium text-ink-800">{u.time}</p>
-                  <p className="text-[11px] text-ink-400">{u.duration}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {loading && !demoMode ? (
+            <PanelLoading />
+          ) : upcoming.length === 0 ? (
+            <p className="py-6 text-center text-[13px] text-ink-500">
+              Heute sind noch keine Sitzungen geloggt.
+            </p>
+          ) : (
+            <ul className="divide-y divide-ink-100">
+              {upcoming.map((u, i) => (
+                <li
+                  key={u.ini + u.time + i}
+                  className="flex items-center gap-4 py-3"
+                >
+                  <span className="grid size-9 place-items-center rounded-full bg-accent-100 text-[11px] font-semibold text-accent-700">
+                    {u.ini}
+                  </span>
+                  <div className="flex-1">
+                    <p className="text-[13.5px] font-medium text-ink-900">
+                      Pat. {u.ini}
+                    </p>
+                    <p className="text-[12px] text-ink-500">{u.indikation}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[13px] font-medium text-ink-800">{u.time}</p>
+                    <p className="text-[11px] text-ink-400">{u.duration}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
 
         <Card title="Berichts-Queue" eyebrow="To-Do">
@@ -1579,3 +1646,21 @@ function PilotBanner() {
   );
 }
 
+
+const DEMO_UPCOMING = [
+  { ini: "M.K.", indikation: "Stimmstörung", time: "10:00", duration: "45 Min." },
+  { ini: "L.S.", indikation: "Aphasie", time: "10:45", duration: "45 Min." },
+  { ini: "T.B.", indikation: "Artikulation", time: "11:30", duration: "30 Min." },
+  { ini: "F.R.", indikation: "Schluckstörung", time: "13:15", duration: "60 Min." },
+];
+
+function formatTime(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("de-DE", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
