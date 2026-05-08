@@ -84,16 +84,18 @@ Vercel-Deployment, nächste Schritte und Sicherheitshinweise.
 **Dateien:** `README.md`.
 
 ### P0-008 — Build- & Typecheck-Verifikation
-Status: `[ ]`
+Status: `[x]`
 Priorität: Hoch
 
 **Ziel:** `pnpm install && pnpm typecheck && pnpm build` läuft auf grünem
 Vercel-Build-Container ebenfalls durch.
 **Akzeptanzkriterien:**
-- Keine TS-Fehler.
-- Keine Vite-Build-Fehler.
-- `dist/index.html` existiert nach Build.
-**Hinweise:** Bei Tailwind-v4-Issues `@tailwindcss/vite` Version checken.
+- Keine TS-Fehler. *(✓)*
+- Keine Vite-Build-Fehler. *(✓)*
+- `dist/index.html` existiert nach Build. *(✓)*
+**Status:** Lokal grün; CI über `.github/workflows/ci.yml` (CC-003) sichert
+das auf jedem Push/PR ab. Vercel-Build noch durchführen sobald Repo
+verbunden.
 
 ---
 
@@ -163,22 +165,20 @@ Priorität: Mittel
 
 **Ziel:** OG-Image und sitemap.xml ergänzen.
 **Akzeptanzkriterien:**
-- `public/og-image.png` (1200×630) existiert.
-- `<link rel="canonical">` pro Route.
-- `public/sitemap.xml` mit allen statischen Routes.
-**Hinweise:** OG-Image kann automatisiert via Satori / Vercel OG generiert
-werden, oder als statisches Bild.
+- `public/og-image.png` (1200×630) existiert. *(offen)*
+- `<link rel="canonical">` pro Route. *(offen — benötigt Helmet/Head-Lib)*
+- `public/sitemap.xml` mit allen statischen Routes. *(✓ erledigt)*
 
 ### P1-012 — Responsive Verhalten Tablet/Mobile
-Status: `[ ]`
+Status: `[~]`
 Priorität: Mittel
 
 **Ziel:** Landingpage-Sektionen auf 768/1024px und Mobile (390px) prüfen.
 **Akzeptanzkriterien:**
-- Hero-Mockup skaliert sauber.
-- Pricing-Cards stapeln korrekt.
-- Waitlist-Formular ist auf Mobile bedienbar.
-- Header-Nav klappt auf Mobile zu einem schlanken Menü.
+- Hero-Mockup skaliert sauber. *(offen — Live-Test nötig)*
+- Pricing-Cards stapeln korrekt. *(✓ grid-cols-3 → 1 unter lg)*
+- Waitlist-Formular ist auf Mobile bedienbar. *(✓ sm:grid-cols-2 → 1)*
+- Header-Nav klappt auf Mobile zu einem schlanken Menü. *(✓ Disclosure-Menu mit Body-Scroll-Lock)*
 
 ### P1-013 — Smooth-Scroll + Anchor-Links robust
 Status: `[ ]`
@@ -464,8 +464,12 @@ Status: `[ ]`
 Priorität: Mittel
 
 ### CC-003 — CI auf GitHub Actions (typecheck + build)
-Status: `[ ]`
+Status: `[x]`
 Priorität: Hoch
+**Akzeptanzkriterien:** Workflow `.github/workflows/ci.yml` läuft auf Push/PR
+gegen `main` und prüft `pnpm install --frozen-lockfile`, `pnpm typecheck`,
+`pnpm build` mit Node 22 + pnpm 10.
+**Dateien:** `.github/workflows/ci.yml`.
 
 ### CC-004 — Pre-Commit-Hooks (Prettier + ESLint)
 Status: `[ ]`
