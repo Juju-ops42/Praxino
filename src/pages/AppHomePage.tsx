@@ -30,6 +30,12 @@ import {
   type Patient,
   type PatientStatus,
 } from "@/lib/patient";
+import {
+  createSession,
+  fetchPracticeSessions,
+  type SessionStatus,
+  type SessionWithPatient,
+} from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2, X } from "lucide-react";
 
@@ -724,18 +730,384 @@ function NoPracticeState() {
 }
 
 function SessionsPanel() {
+  const auth = useAuth();
+  const [practice, setPractice] = useState<Practice | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [sessions, setSessions] = useState<SessionWithPatient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | undefined>();
+  const [createOpen, setCreateOpen] = useState(false);
+  const demoMode = !isSupabaseConfigured;
+
+  const refreshSessions = async (practiceId: string) => {
+    try {
+      setError(undefined);
+      const list = await fetchPracticeSessions(practiceId);
+      setSessions(list);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler beim Laden.");
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (demoMode || !auth.user) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const list = await fetchUserPractices(auth.user.id);
+        if (cancelled) return;
+        const first = list[0] ?? null;
+        setPractice(first);
+        if (first) {
+          const [pList] = await Promise.all([fetchPatients(first.id)]);
+          if (!cancelled) {
+            setPatients(pList);
+            await refreshSessions(first.id);
+          }
+        }
+      } catch (err) {
+        if (!cancelled)
+          setError(
+            err instanceof Error ? err.message : "Daten konnten nicht geladen werden.",
+          );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.user, demoMode]);
+
   return (
     <div className="space-y-8">
       <PanelHeader
         title="Sitzungen"
-        description="Hier landet später die Live-Sitzung mit Audio, Live-Doku und Berichtsentwurf."
+        description="Heute Sitzung loggen, Therapieziel + Verlauf festhalten. Audio-Live-Doku folgt in Phase 6."
+        actions={
+          <Button
+            type="button"
+            onClick={() => setCreateOpen((v) => !v)}
+            disabled={demoMode || !practice || patients.length === 0}
+          >
+            {createOpen ? <X className="size-4" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+            {createOpen ? "Abbrechen" : "Sitzung anlegen"}
+          </Button>
+        }
       />
-      <EmptyState
-        icon={AudioLines}
-        title="Noch keine Sitzung gestartet."
-        body="Audio-MVP folgt in Phase 6. Vorher: Datenschutzkonzept abgeschlossen, AVV-Prozess vorbereitet."
-        cta={{ label: "Roadmap ansehen", to: "/" }}
-      />
+
+      {demoMode ? <DemoBanner /> : null}
+      {!demoMode && !loading && !practice ? <NoPracticeState /> : null}
+      {!demoMode && !loading && practice && patients.length === 0 ? (
+        <NoPatientsState />
+      ) : null}
+
+      {createOpen && practice && auth.user ? (
+        <CreateSessionForm
+          practiceId={practice.id}
+          userId={auth.user.id}
+          patients={patients}
+          onCancel={() => setCreateOpen(false)}
+          onCreated={async () => {
+            setCreateOpen(false);
+            await refreshSessions(practice.id);
+          }}
+        />
+      ) : null}
+
+      {loading ? (
+        <PanelLoading />
+      ) : (
+        <SessionsList sessions={demoMode ? DEMO_SESSIONS : sessions} />
+      )}
+
+      {error ? (
+        <p role="alert" className="text-sm text-rose-600">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+interface DemoSession {
+  id: string;
+  occurred_at: string;
+  duration_minutes: number;
+  goal: string | null;
+  status: SessionStatus;
+  patient_initials: string;
+  patient_indication: string | null;
+}
+
+const DEMO_SESSIONS: DemoSession[] = [
+  {
+    id: "s1",
+    occurred_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
+    duration_minutes: 45,
+    goal: "Tonale Stabilität",
+    status: "logged",
+    patient_initials: "M.K.",
+    patient_indication: "Stimmstörung",
+  },
+  {
+    id: "s2",
+    occurred_at: new Date(Date.now() - 26 * 3600_000).toISOString(),
+    duration_minutes: 45,
+    goal: "Wortfindung verbessern",
+    status: "draft",
+    patient_initials: "L.S.",
+    patient_indication: "Aphasie",
+  },
+  {
+    id: "s3",
+    occurred_at: new Date(Date.now() - 50 * 3600_000).toISOString(),
+    duration_minutes: 30,
+    goal: "S-Laut",
+    status: "signed",
+    patient_initials: "T.B.",
+    patient_indication: "Artikulation",
+  },
+];
+
+function SessionsList({
+  sessions,
+}: {
+  sessions: Array<SessionWithPatient | DemoSession>;
+}) {
+  if (sessions.length === 0) {
+    return (
+      <div className="rounded-3xl border border-dashed border-ink-200 bg-surface-0 p-10 text-center">
+        <p className="font-display text-lg text-ink-700">Noch keine Sitzungen.</p>
+        <p className="mt-1.5 text-sm text-ink-500">
+          Klick „Sitzung anlegen" und logg deine erste Behandlung — Therapieziel
+          + Verlauf reichen für den Anfang.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <ul className="grid gap-3">
+      {sessions.map((s) => (
+        <SessionRow key={s.id} session={s} />
+      ))}
+    </ul>
+  );
+}
+
+function SessionRow({
+  session,
+}: {
+  session: SessionWithPatient | DemoSession;
+}) {
+  const initials = "patient_initials" in session ? session.patient_initials : null;
+  const indication =
+    "patient_indication" in session ? session.patient_indication : null;
+  return (
+    <li className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 rounded-2xl border border-ink-100 bg-surface-0 p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card">
+      <span className="grid size-10 place-items-center rounded-full bg-accent-100 text-[12px] font-semibold text-accent-700">
+        {initials ?? "?"}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[14px] font-medium text-ink-900">
+          {indication ?? "Sitzung"}
+          {session.goal ? (
+            <span className="ml-2 text-ink-400">· {session.goal}</span>
+          ) : null}
+        </p>
+        <p className="text-[12px] text-ink-500">
+          {formatSessionDate(session.occurred_at)} · {session.duration_minutes} Min.
+        </p>
+      </div>
+      <SessionStatusBadge status={session.status} />
+      <ChevronRight className="size-4 text-ink-300" aria-hidden />
+    </li>
+  );
+}
+
+function formatSessionDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat("de-DE", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(d);
+  } catch {
+    return iso;
+  }
+}
+
+function SessionStatusBadge({ status }: { status: SessionStatus }) {
+  const map: Record<SessionStatus, { label: string; cls: string }> = {
+    logged: { label: "Geloggt", cls: "bg-emerald-50 text-emerald-700 ring-emerald-100" },
+    draft: { label: "Entwurf", cls: "bg-amber-50 text-amber-700 ring-amber-100" },
+    signed: { label: "Freigegeben", cls: "bg-accent-50 text-accent-700 ring-accent-100" },
+  };
+  const m = map[status];
+  return (
+    <span className={cn("rounded-full px-2 py-0.5 text-[11px] ring-1", m.cls)}>
+      {m.label}
+    </span>
+  );
+}
+
+function CreateSessionForm({
+  practiceId,
+  userId,
+  patients,
+  onCancel,
+  onCreated,
+}: {
+  practiceId: string;
+  userId: string;
+  patients: Patient[];
+  onCancel: () => void;
+  onCreated: () => void | Promise<void>;
+}) {
+  const [patientId, setPatientId] = useState(patients[0]?.id ?? "");
+  const [duration, setDuration] = useState("45");
+  const [goal, setGoal] = useState("");
+  const [summary, setSummary] = useState("");
+  const [status, setStatus] = useState<SessionStatus>("logged");
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | undefined>();
+
+  async function submit() {
+    if (!patientId) {
+      setErrorMsg("Bitte Patient:in wählen.");
+      return;
+    }
+    setBusy(true);
+    setErrorMsg(undefined);
+    try {
+      const dur = Number.parseInt(duration, 10);
+      await createSession(
+        {
+          practice_id: practiceId,
+          patient_id: patientId,
+          duration_minutes: Number.isFinite(dur) ? dur : 45,
+          goal,
+          summary,
+          status,
+        },
+        userId,
+      );
+      await onCreated();
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : "Sitzung konnte nicht angelegt werden.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+      className="rounded-2xl border border-ink-100 bg-surface-0 p-6 shadow-soft"
+    >
+      <p className="text-[11px] uppercase tracking-wider text-ink-400">Sitzung anlegen</p>
+      <h3 className="mt-1 text-base font-semibold tracking-tight text-ink-900">
+        Wer · wie lange · was war das Ziel
+      </h3>
+
+      <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <FieldShell id="patient" label="Patient:in" required>
+          <Select
+            id="patient"
+            value={patientId}
+            onChange={(e) => setPatientId(e.target.value)}
+          >
+            {patients.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.initials}
+                {p.indication ? ` · ${p.indication}` : ""}
+              </option>
+            ))}
+          </Select>
+        </FieldShell>
+        <FieldShell id="dur" label="Dauer" hint="Minuten">
+          <Input
+            id="dur"
+            inputMode="numeric"
+            value={duration}
+            onChange={(e) =>
+              setDuration(e.target.value.replace(/[^0-9]/g, "") || "0")
+            }
+            maxLength={3}
+          />
+        </FieldShell>
+        <FieldShell id="status" label="Status">
+          <Select
+            id="status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as SessionStatus)}
+          >
+            <option value="logged">Geloggt</option>
+            <option value="draft">Entwurf</option>
+            <option value="signed">Freigegeben</option>
+          </Select>
+        </FieldShell>
+        <div className="sm:col-span-2 lg:col-span-3">
+          <FieldShell id="goal" label="Therapieziel" hint="Optional, kurz">
+            <Input
+              id="goal"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              placeholder="z. B. tonale Stabilität, Wortfindung, Atemstütze"
+            />
+          </FieldShell>
+        </div>
+        <div className="sm:col-span-2 lg:col-span-3">
+          <FieldShell id="summary" label="Verlauf / Notiz" hint="Stichworte reichen">
+            <Input
+              id="summary"
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              placeholder="Atemübungen, Compliance gut, Fortschritt sichtbar"
+            />
+          </FieldShell>
+        </div>
+      </div>
+
+      {errorMsg ? (
+        <p role="alert" className="mt-4 text-sm text-rose-600">
+          {errorMsg}
+        </p>
+      ) : null}
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+          Abbrechen
+        </Button>
+        <Button type="submit" loading={busy}>
+          Anlegen
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function NoPatientsState() {
+  return (
+    <div className="rounded-3xl border border-dashed border-ink-200 bg-surface-0 p-10 text-center">
+      <p className="font-display text-lg text-ink-700">
+        Noch keine Patient:innen angelegt.
+      </p>
+      <p className="mt-1.5 text-sm text-ink-500">
+        Wechsel auf den Tab „Patient:innen" und leg die erste Person an —
+        danach kannst du Sitzungen loggen.
+      </p>
     </div>
   );
 }
@@ -855,35 +1227,3 @@ function PilotBanner() {
   );
 }
 
-function EmptyState({
-  icon: Icon,
-  title,
-  body,
-  cta,
-}: {
-  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-  title: string;
-  body: string;
-  cta?: { label: string; to: string };
-}) {
-  return (
-    <div className="rounded-3xl border border-dashed border-ink-200 bg-surface-0 p-12 text-center">
-      <span className="mx-auto inline-grid size-14 place-items-center rounded-2xl bg-accent-50 text-accent-700 ring-1 ring-accent-100">
-        <Icon className="size-6" aria-hidden />
-      </span>
-      <h2 className="mt-5 font-display text-2xl font-medium tracking-tight text-ink-900">
-        {title}
-      </h2>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-500">{body}</p>
-      {cta ? (
-        <Link
-          to={cta.to}
-          className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ink-900 px-5 text-sm font-medium text-surface-50 hover:bg-ink-800"
-        >
-          {cta.label}
-          <ChevronRight className="size-4" aria-hidden />
-        </Link>
-      ) : null}
-    </div>
-  );
-}
