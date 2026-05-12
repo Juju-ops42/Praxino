@@ -22,7 +22,7 @@ import {
 } from "@/lib/profile";
 import { createPracticeWithMembership } from "@/lib/practice";
 import type { Discipline, TeamSize } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, extractErrorMessage } from "@/lib/utils";
 
 type Step = 0 | 1 | 2;
 
@@ -117,29 +117,44 @@ export function OnboardingPage() {
     setBusy(true);
     setServerError(undefined);
 
+    const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`;
+    const user = auth.user;
+
+    // Profile-Update ist Best-Effort — wenn das schiefgeht (z. B. Trigger
+    // hat schon ein Profil mit anderer Casing angelegt), darf das die
+    // Praxis-Erstellung nicht blockieren. Wir loggen den Fehler nur.
     try {
       await ensureProfile({
-        id: auth.user.id,
-        email: auth.user.email ?? null,
-        full_name: `${form.firstName.trim()} ${form.lastName.trim()}`,
+        id: user.id,
+        email: user.email ?? null,
+        full_name: fullName,
       });
-      await updateProfile(auth.user.id, {
-        full_name: `${form.firstName.trim()} ${form.lastName.trim()}`,
-      });
+      await updateProfile(user.id, { full_name: fullName });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[Praxino] Profile-Update fehlgeschlagen:", err);
+    }
+
+    try {
       await createPracticeWithMembership({
-        ownerId: auth.user.id,
+        ownerId: user.id,
         name: form.practiceName.trim(),
         discipline: form.discipline as Discipline,
         teamSize: form.teamSize as TeamSize,
       });
-      await markOnboarded(auth.user.id);
+      await markOnboarded(user.id);
+      // Auth-Context lädt Profil neu, damit isOnboarded zieht
+      await auth.refreshProfile();
       setStep(2);
       window.setTimeout(() => navigate("/app", { replace: true }), 1400);
     } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[Praxino] Onboarding-Fehler:", err);
       setServerError(
-        err instanceof Error
-          ? err.message
-          : "Onboarding fehlgeschlagen. Bitte später erneut versuchen.",
+        extractErrorMessage(
+          err,
+          "Onboarding fehlgeschlagen. Bitte später erneut versuchen.",
+        ),
       );
     } finally {
       setBusy(false);

@@ -20,3 +20,23 @@ export function formatDateDe(d: Date | string): string {
     year: "numeric",
   }).format(date);
 }
+
+/**
+ * Liest eine sinnvolle Fehlermeldung aus beliebigen Throw-Werten —
+ * insbesondere aus Supabase / PostgREST-Errors, die KEINE Error-Instanzen
+ * sind, sondern Objekte mit { message, code, details, hint }.
+ */
+export function extractErrorMessage(err: unknown, fallback?: string): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const obj = err as Record<string, unknown>;
+    const parts: string[] = [];
+    if (typeof obj.message === "string") parts.push(obj.message);
+    if (typeof obj.details === "string" && obj.details) parts.push(obj.details);
+    if (typeof obj.hint === "string" && obj.hint) parts.push(`Hinweis: ${obj.hint}`);
+    if (parts.length > 0) return parts.join(" · ");
+    if (typeof obj.error_description === "string") return obj.error_description;
+  }
+  if (typeof err === "string") return err;
+  return fallback ?? "Ein unbekannter Fehler ist aufgetreten.";
+}
